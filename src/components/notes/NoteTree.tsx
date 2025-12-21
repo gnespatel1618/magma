@@ -168,9 +168,9 @@ export const NoteTree: React.FC<{
               <div
                 className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm hover:bg-slate-50 transition-colors ${
                   isFolderSelected
-                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                    ? 'bg-rose-light text-rose-dark border border-rose-light'
                     : isSelected
-                    ? 'bg-indigo-50 text-indigo-700'
+                    ? 'bg-rose-light text-rose-dark'
                     : 'text-gray-800'
                 }`}
                 style={{ paddingLeft: `${indentPx}px` }}
@@ -215,7 +215,7 @@ export const NoteTree: React.FC<{
                       e.stopPropagation();
                     }}
                     spellCheck={true}
-                    className="flex-1 px-1 py-0.5 rounded border border-indigo-400 bg-white text-slate-900 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+                    className="flex-1 px-1 py-0.5 rounded border border-rose-brand bg-white text-slate-900 text-sm outline-none focus:ring-2 focus:ring-rose-light"
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
@@ -247,7 +247,7 @@ export const NoteTree: React.FC<{
                     e.stopPropagation();
                     onDelete(item);
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-red-600 transition-opacity"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 rounded border border-rose-error text-rose-error hover:bg-rose-error/10 transition-opacity"
                   title="Delete folder"
                 >
                   <Trash2 size={12} />
@@ -274,7 +274,7 @@ export const NoteTree: React.FC<{
           <div key={item.id} className="group relative">
             <div
               className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm hover:bg-slate-50 ${
-                isSelected ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-gray-800'
+                isSelected ? 'bg-rose-light text-rose-dark border border-rose-light' : 'text-gray-800'
               }`}
               style={{ paddingLeft: `${indentPx}px` }}
               onContextMenu={(e) => {

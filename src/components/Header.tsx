@@ -6,8 +6,8 @@ import {
   DownloadCloud,
   Sparkles,
   Settings,
-  NotebookPen,
 } from 'lucide-react';
+import { Logo } from './ui/Logo';
 
 /**
  * Header component for the main application view.
@@ -17,13 +17,14 @@ import {
  */
 export const Header: React.FC<{
   onGitAction: (action: 'snapshot' | 'push' | 'pull') => void;
-}> = ({ onGitAction }) => {
+  onSettingsClick?: () => void;
+}> = ({ onGitAction, onSettingsClick }) => {
   return (
     <header className="col-span-2 flex items-center justify-between px-4 py-3 bg-white shadow-sm">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-700 font-semibold">
-          <NotebookPen size={18} />
-          Note Hub
+        <div className="flex items-center gap-2 rounded-full bg-rose-light px-3 py-1.5 text-rose-dark font-semibold">
+          <Logo size={18} />
+          Magma
         </div>
         <div className="hidden md:flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm w-72">
           <Search size={16} className="text-slate-500" />
@@ -33,7 +34,7 @@ export const Header: React.FC<{
       <div className="flex items-center gap-2">
         <button
           onClick={() => onGitAction('snapshot')}
-          className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-soft hover:bg-indigo-700"
+          className="inline-flex items-center gap-2 rounded-lg bg-rose-brand px-3 py-2 text-sm font-semibold text-white shadow-soft hover:opacity-90 transition-opacity"
         >
           <GitCommit size={16} /> Snapshot
         </button>
@@ -51,11 +52,14 @@ export const Header: React.FC<{
         </button>
         <button
           onClick={() => alert('AI summary stub')}
-          className="inline-flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+          className="inline-flex items-center gap-2 rounded-lg border border-rose-light bg-rose-light px-3 py-2 text-sm font-semibold text-rose-dark hover:bg-rose-light/80 transition-colors"
         >
           <Sparkles size={16} /> AI
         </button>
-        <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors">
+        <button 
+          onClick={onSettingsClick}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
+        >
           <Settings size={16} />
         </button>
       </div>

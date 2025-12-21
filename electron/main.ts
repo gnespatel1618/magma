@@ -14,12 +14,17 @@ const createWindow = async (): Promise<void> => {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    title: 'Magma',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: true, // Enable spell-checking
     },
+    ...(process.platform === 'darwin' && (() => {
+      const iconPath = path.join(__dirname, '..', 'assets', 'icon.icns');
+      return fs.existsSync(iconPath) ? { icon: iconPath } : {};
+    })()),
   });
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
@@ -109,6 +114,16 @@ const createWindow = async (): Promise<void> => {
 };
 
 app.whenReady().then(() => {
+  // Set app name for macOS dock and menu bar
+  if (process.platform === 'darwin') {
+    app.setName('Magma');
+    // Try to set dock icon if available
+    const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
+    if (fs.existsSync(iconPath)) {
+      app.dock?.setIcon(iconPath);
+    }
+  }
+  
   // Set spell-checker language (use system default or specify languages)
   // This enables spell-checking with suggestions
   const defaultSession = session.defaultSession;
@@ -182,6 +197,11 @@ const scanVault = (
   const entries = fs.readdirSync(fullPath, { withFileTypes: true });
   
   for (const entry of entries) {
+    // Skip .git folder
+    if (entry.name === '.git') {
+      continue;
+    }
+    
     const entryPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
     const fullEntryPath = path.join(vaultPath, entryPath);
     

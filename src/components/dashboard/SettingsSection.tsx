@@ -19,7 +19,7 @@ export const SettingsSection: React.FC = () => {
         <LabeledInput label="OpenAI API key" placeholder="sk-..." />
       </div>
       <div className="flex justify-end">
-        <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-soft hover:bg-indigo-700 transition-colors">
+        <button className="inline-flex items-center gap-2 rounded-lg bg-rose-brand px-3 py-2 text-sm font-semibold text-white shadow-soft hover:opacity-90 transition-opacity">
           Save settings
         </button>
       </div>

@@ -86,7 +86,7 @@ export const ContextMenu: React.FC<{
             onClose();
           }}
           disabled={item.disabled}
-          className={`w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-indigo-50 hover:text-indigo-700 transition-colors ${
+          className={`w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-rose-light hover:text-rose-dark transition-colors ${
             item.disabled ? 'opacity-50 cursor-not-allowed' : ''
           }`}
         >

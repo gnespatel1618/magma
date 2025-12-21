@@ -3,7 +3,6 @@ import type { ParsedTask } from '../../lib/taskParser';
 import { KanbanBoard } from './KanbanBoard';
 import { TableView } from './TableView';
 import { TagsSection } from './TagsSection';
-import { SettingsSection } from './SettingsSection';
 import { MindmapSection } from './MindmapSection';
 
 type NoteMeta = { id: string; path: string; title: string; type?: 'file' | 'folder'; children?: NoteMeta[] };
@@ -28,7 +27,6 @@ export const Dashboard: React.FC<{
         <MindmapSection notes={notes} />
       </div>
       <TagsSection tags={tags} />
-      <SettingsSection />
     </div>
   );
 };

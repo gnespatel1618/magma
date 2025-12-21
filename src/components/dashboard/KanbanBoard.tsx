@@ -8,7 +8,7 @@ import { Badge } from '../ui/Badge';
  */
 const statusTone: Record<'todo' | 'doing' | 'done', string> = {
   todo: 'bg-slate-100 text-gray-800',
-  doing: 'bg-indigo-100 text-indigo-700',
+  doing: 'bg-rose-light text-rose-dark',
   done: 'bg-emerald-100 text-emerald-700',
 };
 

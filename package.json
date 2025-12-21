@@ -1,8 +1,35 @@
 {
-  "name": "note-taking-app",
+  "name": "magma",
   "version": "0.1.0",
   "main": "dist/main.js",
-  "description": "Electron Markdown+Git task hub with AI-ready hooks, mindmaps, and Excalidraw.",
+  "description": "A modern, Electron-based note-taking application for Obsidian-style vaults with Markdown editing, task management, and Git integration.",
+  "keywords": [
+    "note-taking",
+    "markdown",
+    "obsidian",
+    "electron",
+    "kanban",
+    "task-management",
+    "git-integration",
+    "excalidraw",
+    "knowledge-base",
+    "productivity",
+    "markdown-editor",
+    "vault",
+    "desktop-app",
+    "typescript",
+    "react"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/magma.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR_USERNAME/magma/issues"
+  },
+  "homepage": "https://github.com/YOUR_USERNAME/magma#readme",
   "scripts": {
     "dev": "run-p dev:vite dev:main dev:preload dev:electron:start",
     "dev:vite": "vite dev --port 5173 --strictPort",
@@ -49,13 +76,24 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.note.hub",
+    "appId": "com.magma.app",
+    "productName": "Magma",
     "files": [
       "dist/**/*",
       "package.json"
     ],
     "directories": {
       "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "icon": "assets/icon.png"
     }
   }
 }

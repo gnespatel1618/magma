@@ -1,6 +1,13 @@
-# Note Hub
+# Magma
 
-A modern, Electron-based note-taking application designed for Obsidian-style vaults. Edit Markdown files directly, manage tasks with Kanban views, and integrate with Git for version control.
+> A modern, Electron-based note-taking application designed for Obsidian-style vaults. Edit Markdown files directly, manage tasks with Kanban views, and integrate with Git for version control.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
+[![Electron](https://img.shields.io/badge/Electron-191970?logo=electron&logoColor=white)](https://www.electronjs.org/)
+
+Magma provides an intuitive interface for managing your knowledge base with a focus on simplicity and productivity. Perfect for users who want an Obsidian-compatible note-taking experience with built-in task management and Git integration.
 
 ## Features
 
@@ -170,7 +177,7 @@ note-taking-app/
 
 ## License
 
-[Add your license here]
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

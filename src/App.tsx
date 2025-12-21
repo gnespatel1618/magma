@@ -30,6 +30,12 @@ import {
 import { parseTasksFromMarkdown, updateTaskStatus, type ParsedTask } from './lib/taskParser';
 import { extractHashtags } from './lib/tagParser';
 import { NoteTree } from './components/notes/NoteTree';
+import { Logo } from './components/ui/Logo';
+import { SettingsPage } from './components/SettingsPage';
+import { BacklinksPanel } from './components/notes/BacklinksPanel';
+import { Breadcrumbs } from './components/notes/Breadcrumbs';
+import { StatusBar } from './components/notes/StatusBar';
+import { Sidebar } from './components/Sidebar';
 
 const LazyExcalidraw = React.lazy(async () => {
   const mod = await import('@excalidraw/excalidraw');
@@ -40,7 +46,7 @@ type NoteMeta = { id: string; path: string; title: string; type?: 'file' | 'fold
 
 const statusTone: Record<'todo' | 'doing' | 'done', string> = {
   todo: 'bg-slate-100 text-gray-800',
-  doing: 'bg-indigo-100 text-indigo-700',
+  doing: 'bg-rose-light text-rose-dark',
   done: 'bg-emerald-100 text-emerald-700'
 };
 
@@ -68,7 +74,7 @@ function App() {
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<NoteMeta | null>(null);
-  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks'>('dashboard');
+  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks' | 'settings'>('dashboard');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [allTags, setAllTags] = useState<Set<string>>(new Set());
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>('');
@@ -351,6 +357,9 @@ function App() {
   const openNote = async (note: NoteMeta) => {
     if (note.type === 'folder') return; // Don't open folders
     
+    // Switch to notes section when opening a note
+    setSection('notes');
+    
     // Clear any pending auto-save when switching notes
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -485,9 +494,9 @@ function App() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-900 text-slate-100">
         <div className="max-w-5xl mx-auto px-6 py-14">
           <div className="flex items-center gap-3 mb-8">
-            <div className="flex items-center gap-2 rounded-full bg-indigo-600/20 px-3 py-1.5 text-indigo-100 border border-indigo-500/40">
-              <NotebookPen size={18} />
-              Note Hub
+            <div className="flex items-center gap-2 rounded-full bg-rose-brand/20 px-3 py-1.5 text-rose-light border border-rose-brand/40">
+              <Logo size={18} />
+              Magma
             </div>
             <span className="text-sm text-slate-300">Obsidian-friendly vaults</span>
           </div>
@@ -501,7 +510,7 @@ function App() {
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={openVault}
-                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-900/40 hover:bg-indigo-400"
+                  className="inline-flex items-center gap-2 rounded-lg bg-rose-brand px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-rose-brand/40 hover:opacity-90 transition-opacity"
                 >
                   <Plus size={16} />
                   Open vault
@@ -527,14 +536,14 @@ function App() {
               <div className="text-sm text-slate-300 mb-3 font-semibold">Quick start</div>
               <ol className="space-y-3 text-sm text-slate-200">
                 <li className="flex gap-3">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500 text-white text-xs font-bold">1</span>
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-brand text-white text-xs font-bold">1</span>
                   <div>
                     <p className="font-semibold text-slate-100">Open vault</p>
                     <p className="text-slate-400">Select any folder with Markdown files.</p>
                   </div>
                 </li>
                 <li className="flex gap-3">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500 text-white text-xs font-bold">2</span>
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-brand text-white text-xs font-bold">2</span>
                   <div>
                     <p className="font-semibold text-slate-100">Pick a note</p>
                     <p className="text-slate-400">Edit and save; tasks auto-sync to Kanban/Table.</p>
@@ -680,13 +689,13 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="grid grid-rows-[64px_1fr] grid-cols-[280px_1fr] min-h-screen gap-px bg-slate-200">
-        <header className="col-span-2 flex items-center justify-between px-4 py-3 bg-white shadow-sm">
+    <div className="h-screen bg-slate-50 text-slate-900 flex flex-col overflow-hidden">
+      <div className="grid grid-rows-[64px_1fr_24px] grid-cols-[280px_1fr_256px] h-screen gap-px bg-slate-200">
+        <header className="col-span-3 flex items-center justify-between px-4 py-3 bg-white shadow-sm z-10">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-700 font-semibold">
-              <NotebookPen size={18} />
-              Note Hub
+            <div className="flex items-center gap-2 rounded-full bg-rose-light px-3 py-1.5 text-rose-dark font-semibold">
+              <Logo size={18} />
+              Magma
             </div>
             <div className="hidden md:flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm w-72">
               <Search size={16} className="text-slate-500" />
@@ -694,7 +703,7 @@ function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => gitAction('snapshot')} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-soft hover:bg-indigo-700">
+            <button onClick={() => gitAction('snapshot')} className="inline-flex items-center gap-2 rounded-lg bg-rose-brand px-3 py-2 text-sm font-semibold text-white shadow-soft hover:opacity-90 transition-opacity">
               <GitCommit size={16} /> Snapshot
             </button>
             <button onClick={() => gitAction('push')} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors">
@@ -703,36 +712,77 @@ function App() {
             <button onClick={() => gitAction('pull')} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors">
               <DownloadCloud size={16} /> Pull
             </button>
-            <button onClick={() => alert('AI summary stub')} className="inline-flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors">
+            <button onClick={() => alert('AI summary stub')} className="inline-flex items-center gap-2 rounded-lg border border-rose-light bg-rose-light px-3 py-2 text-sm font-semibold text-rose-dark hover:bg-rose-light/80 transition-colors">
               <Sparkles size={16} /> AI
             </button>
-            <button className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors">
+            <button 
+              onClick={() => setSection('settings')}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
+            >
               <Settings size={16} />
             </button>
           </div>
         </header>
 
-        <aside className="row-start-2 bg-white border-r border-slate-200 px-4 py-4 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-500">Vault</p>
-              <p className="text-sm font-semibold text-slate-800 truncate max-w-[180px]">{vaultPath ?? 'No vault selected'}</p>
+        <Sidebar 
+          vaultPath={vaultPath}
+          currentSection={section}
+          onOpenVault={openVault}
+          onSectionChange={setSection}
+        >
+          {/* Note Tree in Sidebar - Always visible */}
+          {vaultPath && (
+            <div className="px-2 py-2">
+              <div className="mb-2 flex items-center justify-between px-2">
+                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Notes</h3>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setShowNewFolderModal(true)}
+                    className="p-1 rounded hover:bg-slate-200 transition-colors"
+                    title="New folder"
+                  >
+                    <Folder size={12} />
+                  </button>
+                  <button
+                    onClick={() => setShowNewNoteModal(true)}
+                    className="p-1 rounded hover:bg-slate-200 transition-colors"
+                    title="New note"
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+              </div>
+              {selectedFolder && (
+                <div className="mx-2 mb-2 flex items-center justify-between px-2 py-1 rounded bg-rose-light border border-rose-light text-xs">
+                  <div className="flex items-center gap-1 text-rose-dark">
+                    <FolderOpen size={10} />
+                    <span className="truncate">Creating in: {selectedFolder.title}</span>
+                  </div>
+                  <button
+                    onClick={() => setSelectedFolder(null)}
+                    className="text-rose-brand hover:text-rose-dark font-semibold"
+                    title="Deselect folder"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
+              <NoteTree 
+                items={notes} 
+                selectedNote={selectedNote} 
+                selectedFolder={selectedFolder}
+                onSelect={openNote} 
+                onSelectFolder={setSelectedFolder}
+                onDelete={deleteNote}
+                onRename={renameNote}
+              />
             </div>
-            <button onClick={openVault} className="text-xs font-semibold text-indigo-700 hover:text-indigo-800">Change</button>
-          </div>
-          <div className="space-y-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Navigation</p>
-            <div className="space-y-2">
-              <SidebarItem icon={<KanbanSquare size={16} />} label="Dashboard" active={section === 'dashboard'} onClick={() => setSection('dashboard')} />
-              <SidebarItem icon={<NotebookPen size={16} />} label="Notes" active={section === 'notes'} onClick={() => setSection('notes')} />
-              <SidebarItem icon={<List size={16} />} label="Tasks" active={section === 'tasks'} onClick={() => setSection('tasks')} />
-            </div>
-          </div>
-        </aside>
+          )}
+        </Sidebar>
 
-        <main className="row-start-2 bg-slate-50 px-5 py-5 overflow-y-auto space-y-4">
+        <main className="row-start-2 col-start-2 col-span-2 bg-slate-50 overflow-hidden">
           {section === 'dashboard' && (
-            <div className="space-y-4">
+            <div className="h-full overflow-y-auto px-5 py-5 space-y-4">
               {/* Filter and Search Controls */}
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft space-y-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -744,12 +794,12 @@ function App() {
                     placeholder="Search tasks..."
                     value={taskSearchQuery}
                     onChange={(e) => setTaskSearchQuery(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   />
                   <select
                     value={taskFilterOwner}
                     onChange={(e) => setTaskFilterOwner(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Owners</option>
                     {uniqueOwners.map(owner => (
@@ -759,7 +809,7 @@ function App() {
                   <select
                     value={taskFilterProject}
                     onChange={(e) => setTaskFilterProject(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Projects</option>
                     {uniqueProjects.map(project => (
@@ -769,7 +819,7 @@ function App() {
                   <select
                     value={taskFilterPriority}
                     onChange={(e) => setTaskFilterPriority(e.target.value as 'low' | 'med' | 'high' | '')}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Priorities</option>
                     <option value="high">High</option>
@@ -781,7 +831,7 @@ function App() {
                   <select
                     value={taskFilterStatus}
                     onChange={(e) => setTaskFilterStatus(e.target.value as 'todo' | 'doing' | 'done' | '')}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Statuses</option>
                     <option value="todo">Todo</option>
@@ -791,7 +841,7 @@ function App() {
                   <select
                     value={taskSortBy}
                     onChange={(e) => setTaskSortBy(e.target.value as typeof taskSortBy)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="due">Sort by Due Date</option>
                     <option value="priority">Sort by Priority</option>
@@ -982,7 +1032,7 @@ function App() {
                     {Array.from(allTags).map(tag => (
                       <span
                         key={tag}
-                        className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 hover:bg-indigo-200 cursor-pointer transition-colors"
+                        className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold bg-rose-light text-rose-dark border border-rose-light hover:bg-rose-light/80 cursor-pointer transition-colors"
                         title={`Click to filter notes with #${tag}`}
                       >
                         #{tag}
@@ -1005,7 +1055,7 @@ function App() {
                   <LabeledInput label="OpenAI API key" placeholder="sk-..." />
                 </div>
                 <div className="flex justify-end">
-                  <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-soft hover:bg-indigo-700">
+                  <button className="inline-flex items-center gap-2 rounded-lg bg-rose-brand px-3 py-2 text-sm font-semibold text-white shadow-soft hover:opacity-90 transition-opacity">
                     Save settings
                   </button>
                 </div>
@@ -1014,59 +1064,21 @@ function App() {
           )}
 
           {section === 'notes' && (
-            <div className="grid grid-cols-[320px_1fr] gap-4">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-slate-800">Notes</h3>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setShowNewFolderModal(true)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
-                      title="New folder"
-                    >
-                      <Folder size={14} />
-                    </button>
-                    <button
-                      onClick={() => setShowNewNoteModal(true)}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
-                    >
-                      <Plus size={14} /> New note
-                    </button>
-                  </div>
-                </div>
-                {selectedFolder && (
-                  <div className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs">
-                    <div className="flex items-center gap-2 text-indigo-700">
-                      <FolderOpen size={12} />
-                      <span className="truncate">Creating in: {selectedFolder.title}</span>
-                    </div>
-                    <button
-                      onClick={() => setSelectedFolder(null)}
-                      className="text-indigo-600 hover:text-indigo-800 font-semibold"
-                      title="Deselect folder (create at root level)"
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                <div className="space-y-1">
-                  <NoteTree 
-                    items={notes} 
-                    selectedNote={selectedNote} 
-                    selectedFolder={selectedFolder}
-                    onSelect={openNote} 
-                    onSelectFolder={setSelectedFolder}
-                    onDelete={deleteNote}
-                    onRename={renameNote}
-                  />
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-soft space-y-3">
+            <div className="row-start-2 col-start-2 flex flex-col h-full overflow-hidden">
+              {/* Note Editor Area */}
+              <div className="flex-1 flex flex-col bg-white border border-slate-200 overflow-hidden">
                 {selectedNote ? (
                   <>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-800"><NotebookPen size={16} /> {selectedNote.title}</div>
+                    {/* Breadcrumbs */}
+                    <div className="px-4 pt-3 pb-2 border-b border-slate-200">
+                      <Breadcrumbs selectedNote={selectedNote} notes={notes} />
+                    </div>
+                    
+                    {/* Note Header */}
+                    <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                        <NotebookPen size={16} /> {selectedNote.title}
+                      </div>
                       <div className="flex items-center gap-3">
                         {saveStatus === 'saving' && (
                           <span className="text-xs text-slate-500 flex items-center gap-1.5">
@@ -1080,21 +1092,22 @@ function App() {
                             Saved
                           </span>
                         )}
-                        <button onClick={() => saveNote(false)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-soft hover:bg-indigo-700">
+                        <button onClick={() => saveNote(false)} className="inline-flex items-center gap-2 rounded-lg bg-rose-brand px-3 py-2 text-sm font-semibold text-white shadow-soft hover:opacity-90 transition-opacity">
                           Save note
                         </button>
                       </div>
                     </div>
-                    {/* Display tags from current note */}
+                    
+                    {/* Tags */}
                     {(() => {
                       const currentTags = extractHashtags(noteContent);
                       return currentTags.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
+                        <div className="px-4 py-2 border-b border-slate-200 flex flex-wrap items-center gap-2">
                           <span className="text-xs font-semibold text-gray-800">Tags:</span>
                           {currentTags.map(tag => (
                             <span
                               key={tag}
-                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200"
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-rose-light text-rose-dark border border-rose-light"
                             >
                               #{tag}
                             </span>
@@ -1102,20 +1115,52 @@ function App() {
                         </div>
                       );
                     })()}
-                    <LivePreviewEditor
-                      value={noteContent}
-                      onChange={handleNoteContentChange}
-                    />
+                    
+                    {/* Editor */}
+                    <div className="flex-1 overflow-y-auto">
+                      <LivePreviewEditor
+                        value={noteContent}
+                        onChange={handleNoteContentChange}
+                      />
+                    </div>
                   </>
                 ) : (
-                  <div className="text-slate-500 text-sm">Select a note to start editing.</div>
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-slate-500 text-sm">Select a note to start editing.</div>
+                  </div>
                 )}
               </div>
             </div>
           )}
+          
+          {/* Backlinks Panel */}
+          {section === 'notes' && (
+            <div className="row-start-2 col-start-3 h-full overflow-hidden">
+              <BacklinksPanel 
+                selectedNote={selectedNote}
+                allNotes={notes}
+                noteContent={noteContent}
+              />
+            </div>
+          )}
+          
+          {/* Status Bar */}
+          {section === 'notes' && (
+            <div className="row-start-3 col-span-3">
+              <StatusBar 
+                noteContent={noteContent}
+                backlinksCount={0}
+              />
+            </div>
+          )}
 
+          {section === 'settings' && (
+            <div className="h-full overflow-y-auto px-5 py-5">
+              <SettingsPage />
+            </div>
+          )}
           {section === 'tasks' && (
-            <div className="space-y-4">
+            <div className="h-full overflow-y-auto px-5 py-5 space-y-4">
               {/* Filter and Search Controls */}
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft space-y-3">
                 <div className="flex items-center justify-between">
@@ -1145,12 +1190,12 @@ function App() {
                     placeholder="Search tasks..."
                     value={taskSearchQuery}
                     onChange={(e) => setTaskSearchQuery(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   />
                   <select
                     value={taskFilterOwner}
                     onChange={(e) => setTaskFilterOwner(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Owners</option>
                     {uniqueOwners.map(owner => (
@@ -1160,7 +1205,7 @@ function App() {
                   <select
                     value={taskFilterProject}
                     onChange={(e) => setTaskFilterProject(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Projects</option>
                     {uniqueProjects.map(project => (
@@ -1170,7 +1215,7 @@ function App() {
                   <select
                     value={taskFilterPriority}
                     onChange={(e) => setTaskFilterPriority(e.target.value as 'low' | 'med' | 'high' | '')}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Priorities</option>
                     <option value="high">High</option>
@@ -1182,7 +1227,7 @@ function App() {
                   <select
                     value={taskFilterStatus}
                     onChange={(e) => setTaskFilterStatus(e.target.value as 'todo' | 'doing' | 'done' | '')}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Statuses</option>
                     <option value="todo">Todo</option>
@@ -1192,7 +1237,7 @@ function App() {
                   <select
                     value={taskSortBy}
                     onChange={(e) => setTaskSortBy(e.target.value as typeof taskSortBy)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="due">Sort by Due Date</option>
                     <option value="priority">Sort by Priority</option>
@@ -1396,7 +1441,7 @@ function App() {
                 Cancel
               </button>
               <button
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-soft hover:bg-indigo-700"
+                className="rounded-lg bg-rose-brand px-3 py-1.5 text-sm font-semibold text-white shadow-soft hover:opacity-90 transition-opacity"
                 onClick={createNote}
               >
                 Create
@@ -1433,7 +1478,7 @@ function App() {
                 Cancel
               </button>
               <button
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white shadow-soft hover:bg-indigo-700"
+                className="rounded-lg bg-rose-brand px-3 py-1.5 text-sm font-semibold text-white shadow-soft hover:opacity-90 transition-opacity"
                 onClick={createFolder}
               >
                 Create
@@ -1446,24 +1491,6 @@ function App() {
   );
 }
 
-const SidebarItem = ({
-  icon,
-  label,
-  active = false,
-  onClick
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) => (
-  <button
-    onClick={onClick}
-    className={`w-full inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition-colors ${active ? 'bg-indigo-500 text-white shadow-sm' : 'text-gray-800 hover:bg-slate-100'}`}
-  >
-    {icon} {label}
-  </button>
-);
 
 const TagPill = ({ label, tone = 'bg-slate-50 text-gray-800 border-slate-200' }: { label: string; tone?: string }) => (
   <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}>{label}</div>
@@ -1516,7 +1543,7 @@ const renderInlineMarkdown = (text: string): React.ReactNode => {
     const hashtagMatch = remaining.match(/^#([a-zA-Z0-9_-]+)/);
     if (hashtagMatch) {
       parts.push(
-        <span key={key++} className="text-indigo-600 font-semibold">
+        <span key={key++} className="text-rose-brand font-semibold">
           #{hashtagMatch[1]}
         </span>
       );
@@ -1529,7 +1556,7 @@ const renderInlineMarkdown = (text: string): React.ReactNode => {
     if (wikilinkTagMatch) {
       const tagName = wikilinkTagMatch[1].split('|')[0].trim(); // Handle aliases like [[tag|alias]]
       parts.push(
-        <span key={key++} className="text-indigo-600 font-semibold">
+        <span key={key++} className="text-rose-brand font-semibold">
           [[{tagName}]]
         </span>
       );
@@ -2134,7 +2161,7 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
                       setShowCommandMenu(false);
                     }, 200);
                   }}
-                  className="w-full px-0 py-1 bg-slate-100 border-b-2 border-indigo-400 text-sm text-slate-900 outline-none focus:ring-0 font-mono"
+                  className="w-full px-0 py-1 bg-slate-100 border-b-2 border-rose-brand text-sm text-slate-900 outline-none focus:ring-0 font-mono"
                   data-line-indent={indentPx}
                 />
                 {showCommandMenu && commandMenuPosition && activeLineIndex === index && (() => {
@@ -2171,8 +2198,8 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
                             <button
                               key={cmd.id}
                               onClick={() => insertCommand(cmd)}
-                              className={`w-full text-left px-3 py-2.5 flex items-center gap-3 hover:bg-indigo-50 transition-colors ${
-                                idx === commandMenuIndex ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''
+                              className={`w-full text-left px-3 py-2.5 flex items-center gap-3 hover:bg-rose-light transition-colors ${
+                                idx === commandMenuIndex ? 'bg-rose-light border-l-2 border-rose-brand' : ''
                               }`}
                               onMouseEnter={() => setCommandMenuIndex(idx)}
                             >

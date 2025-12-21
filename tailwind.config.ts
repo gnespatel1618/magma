@@ -12,13 +12,18 @@ const config: Config = {
       colors: {
         border: 'hsl(214 32% 91%)',
         input: 'hsl(214 32% 91%)',
-        ring: 'hsl(221 81% 46%)',
+        ring: '#E11D48',
         background: 'hsl(210 40% 98%)',
         foreground: 'hsl(222.2 47.4% 11.2%)',
         primary: {
-          DEFAULT: 'hsl(221 81% 46%)',
-          foreground: 'hsl(210 40% 98%)'
+          DEFAULT: '#E11D48',
+          foreground: '#FFFFFF'
         },
+        'rose-brand': '#E11D48',
+        'rose-light': '#FFE4E6',
+        'rose-dark': '#881337',
+        'rose-error': '#EF4444',
+        'warm-gray': '#FAFAF9',
         muted: {
           DEFAULT: 'hsl(214 32% 95%)',
           foreground: 'hsl(215.4 16.3% 46.9%)'

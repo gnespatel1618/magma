@@ -17,7 +17,7 @@ export const TagsSection: React.FC<{ tags: Set<string> }> = ({ tags }) => {
           {Array.from(tags).map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 hover:bg-indigo-200 cursor-pointer transition-colors"
+              className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold bg-rose-light text-rose-dark border border-rose-light hover:bg-rose-light/80 cursor-pointer transition-colors"
               title={`Click to filter notes with #${tag}`}
             >
               #{tag}
