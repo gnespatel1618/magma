@@ -1,0 +1,59 @@
+{
+  "name": "note-taking-app",
+  "version": "0.1.0",
+  "main": "dist/main.js",
+  "description": "Electron Markdown+Git task hub with AI-ready hooks, mindmaps, and Excalidraw.",
+  "scripts": {
+    "dev": "run-p dev:vite dev:main dev:preload dev:electron:start",
+    "dev:vite": "vite dev --port 5173 --strictPort",
+    "dev:main": "esbuild electron/main.ts --bundle --platform=node --external:electron --outfile=dist/main.js --format=cjs --watch=forever",
+    "dev:preload": "esbuild electron/preload.ts --bundle --platform=node --external:electron --outfile=dist/preload.js --format=cjs --watch=forever",
+    "dev:electron:start": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 wait-on http://localhost:5173 && electron .",
+    "build": "run-s build:main build:preload build:renderer",
+    "build:main": "esbuild electron/main.ts --bundle --platform=node --external:electron --outfile=dist/main.js --format=cjs",
+    "build:preload": "esbuild electron/preload.ts --bundle --platform=node --external:electron --outfile=dist/preload.js --format=cjs",
+    "build:renderer": "vite build",
+    "package": "npm run build && electron-builder --dir",
+    "start": "npm run build && electron .",
+    "lint": "echo \"Add linting as needed\""
+  },
+  "dependencies": {
+    "@excalidraw/excalidraw": "^0.17.5",
+    "class-variance-authority": "^0.7.0",
+    "isomorphic-git": "^1.25.10",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "simple-git": "^3.24.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.2",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.6.0",
+    "electron-builder": "^25.1.6",
+    "esbuild": "^0.23.1",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.4.47",
+    "tailwind-merge": "^2.5.2",
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.note.hub",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    }
+  }
+}
