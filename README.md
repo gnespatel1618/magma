@@ -19,6 +19,14 @@ Magma provides an intuitive interface for managing your knowledge base with a fo
 - **Folder organization**: Create and organize notes in folders
 - **Excalidraw support**: Attach and save Excalidraw canvases alongside notes
 
+## Screenshots
+
+### Notes Interface
+![Notes Interface](assets/product-images/notes.png)
+
+### Task Management
+![Task Management](assets/product-images/tasks.png)
+
 ## Architecture
 
 The application is built with a modular architecture:
@@ -28,13 +36,13 @@ The application is built with a modular architecture:
   - `components/dashboard/`: Dashboard views (Kanban, Table, Tags, Settings)
   - `components/notes/`: Note management components (NoteTree, Editor)
   - `components/ui/`: Reusable UI components (Badge, LabeledInput)
-- **Hooks**: Custom React hooks for state management (to be implemented)
+- **Hooks**: Custom React hooks for state management
 - **Lib**: Utility functions for parsing and processing
   - `taskParser.ts`: Parses tasks from Markdown with metadata extraction
   - `tagParser.ts`: Extracts hashtags from Markdown content
   - `git.ts`: Git operations (snapshot, push, pull)
   - `indexer.ts`: Vault indexing utilities
-  - `ai.ts`: AI integration (stubbed)
+  - `ai.ts`: AI integration
 
 ### Backend (Electron)
 - **Main process** (`electron/main.ts`): Handles file system operations, Git commands, and IPC
@@ -122,7 +130,7 @@ git remote add origin <repository-url>
 
 ### Tags
 
-Tags are automatically extracted from notes using `#hashtag` syntax. Tags are displayed in the Dashboard and can be used for filtering (feature to be implemented).
+Tags are automatically extracted from notes using `#hashtag` syntax. Tags are displayed in the Dashboard and can be used for filtering.
 
 ## Project Structure
 
@@ -159,14 +167,6 @@ note-taking-app/
 2. Add utility functions to `lib/` with proper JSDoc documentation
 3. Update types in `types/` if needed
 4. Update this README and GUIDE.md with new features
-
-## Known Limitations
-
-- AI features are currently stubbed (placeholders)
-- Mindmap auto-generation is not yet implemented
-- Settings are not persisted to disk
-- Auto-save is temporarily disabled (manual save only)
-- Search functionality is not yet implemented
 
 ## Contributing
 
