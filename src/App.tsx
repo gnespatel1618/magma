@@ -25,7 +25,8 @@ import {
   ChevronRight,
   ChevronDown,
   Trash2,
-  List
+  List,
+  GripVertical
 } from 'lucide-react';
 import { parseTasksFromMarkdown, updateTaskStatus, type ParsedTask } from './lib/taskParser';
 import { extractHashtags } from './lib/tagParser';
@@ -1683,6 +1684,9 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
   const [commandMenuIndex, setCommandMenuIndex] = useState(0);
   const [commandMenuPosition, setCommandMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [commandFilter, setCommandFilter] = useState('');
+  const [draggedLineIndex, setDraggedLineIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [hoveredLineIndex, setHoveredLineIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const previousValueRef = useRef<string>(value);
@@ -2176,6 +2180,135 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
     setActiveLineIndex(index);
   };
 
+  // Get all children indices for a given line (for nested lists)
+  const getChildrenIndices = (index: number): number[] => {
+    if (index < 0 || index >= lines.length) return [];
+    const currentIndent = getIndentLevel(lines[index]);
+    const children: number[] = [];
+    
+    for (let i = index + 1; i < lines.length; i++) {
+      if (!lines[i]) continue;
+      const indent = getIndentLevel(lines[i]);
+      if (indent <= currentIndent) break;
+      children.push(i);
+    }
+    
+    return children;
+  };
+
+  // Get all indices that should move together (line + all its children)
+  const getLineGroupIndices = (index: number): number[] => {
+    const children = getChildrenIndices(index);
+    return [index, ...children];
+  };
+
+  // Handle drag start
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+    setDraggedLineIndex(index);
+    // Prevent the input from being focused during drag
+    e.stopPropagation();
+  };
+
+  // Handle drag over
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    if (draggedLineIndex === null) return;
+    
+    // Don't allow dropping on itself or its children
+    const draggedGroup = getLineGroupIndices(draggedLineIndex);
+    if (draggedGroup.includes(index)) {
+      setDragOverIndex(null);
+      return;
+    }
+    
+    setDragOverIndex(index);
+  };
+
+  // Handle drag leave
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if we're leaving the container, not just moving to a child
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (!containerRef.current?.contains(relatedTarget)) {
+      setDragOverIndex(null);
+    }
+  };
+
+  // Handle drop
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    
+    if (draggedLineIndex === null) return;
+    
+    const draggedGroup = getLineGroupIndices(draggedLineIndex);
+    
+    // Don't allow dropping on itself or its children
+    if (draggedGroup.includes(dropIndex)) {
+      setDraggedLineIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    
+    // Create new lines array
+    const newLines = [...lines];
+    const draggedLines = draggedGroup.map(i => lines[i]);
+    
+    // Remove dragged lines (sort descending to remove from end first)
+    const sortedGroup = [...draggedGroup].sort((a, b) => b - a);
+    sortedGroup.forEach(i => {
+      newLines.splice(i, 1);
+    });
+    
+    // Calculate target index after removal
+    let targetIndex = dropIndex;
+    if (draggedLineIndex < dropIndex) {
+      // If dragging down, adjust for removed items
+      targetIndex = dropIndex - draggedGroup.length;
+    }
+    
+    // Insert at the target position (before the target line)
+    // This way, the dragged item replaces the target's position
+    newLines.splice(targetIndex, 0, ...draggedLines);
+    
+    setLines(newLines);
+    const newValue = newLines.join('\n');
+    previousValueRef.current = newValue;
+    previousLinesRef.current = newValue;
+    isInternalUpdateRef.current = true;
+    onChange(newValue);
+    
+    // Update active line index if it was affected
+    if (activeLineIndex !== null) {
+      if (draggedGroup.includes(activeLineIndex)) {
+        // The active line was moved
+        const offsetInGroup = draggedGroup.indexOf(activeLineIndex);
+        setActiveLineIndex(targetIndex + offsetInGroup);
+      } else if (draggedLineIndex < dropIndex) {
+        // Dragging down: lines between draggedLineIndex and dropIndex shift up
+        if (activeLineIndex > draggedLineIndex && activeLineIndex <= dropIndex) {
+          setActiveLineIndex(activeLineIndex - draggedGroup.length);
+        }
+      } else {
+        // Dragging up: lines between dropIndex and draggedLineIndex shift down
+        if (activeLineIndex >= dropIndex && activeLineIndex < draggedLineIndex) {
+          setActiveLineIndex(activeLineIndex + draggedGroup.length);
+        }
+      }
+    }
+    
+    setDraggedLineIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Handle drag end
+  const handleDragEnd = () => {
+    setDraggedLineIndex(null);
+    setDragOverIndex(null);
+  };
+
   return (
     <div className="w-full rounded-xl border border-slate-200 bg-white overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 bg-slate-50">
@@ -2217,8 +2350,37 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
             const indentLevel = indent.replace(/\t/g, '  ').length;
             const indentPx = indentLevel * 20; // 20px per 2 spaces (or 1 tab)
             
+            const isDragged = draggedLineIndex === index;
+            const isDragOver = dragOverIndex === index;
+            const isHovered = hoveredLineIndex === index;
+            const draggedGroup = draggedLineIndex !== null ? getLineGroupIndices(draggedLineIndex) : [];
+            const isInDraggedGroup = draggedGroup.includes(index);
+            
             return (
-              <div key={index} className="min-h-[1.75rem] relative" style={{ paddingLeft: `${8 + indentPx}px` }}>
+              <div
+                key={index}
+                className={`min-h-[1.75rem] relative group ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
+                style={{ paddingLeft: `${8 + indentPx + 20}px` }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
+              >
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
                 <input
                   ref={inputRef}
                   type="text"
@@ -2315,15 +2477,42 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
           const hasNesting = indentLevel > 0;
           const borderStyle = hasNesting ? { borderLeft: `2px solid ${indentLevel % 2 === 0 ? '#e2e8f0' : '#cbd5e1'}` } : {};
 
+          // Drag state for non-active lines
+          const isDragged = draggedLineIndex === index;
+          const isDragOver = dragOverIndex === index;
+          const isHovered = hoveredLineIndex === index;
+          const draggedGroup = draggedLineIndex !== null ? getLineGroupIndices(draggedLineIndex) : [];
+          const isInDraggedGroup = draggedGroup.includes(index);
+
           // Render markdown for non-active lines
           if (trimmed === '') {
             return (
               <div
                 key={index}
-                className="min-h-[1.75rem] cursor-text hover:bg-slate-50/50"
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative pl-5 ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
-                style={{ paddingLeft: `${8 + indentPx}px`, ...borderStyle }}
-              />
+                style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
+              >
+                <div
+                  className={`absolute left-0 top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
+              </div>
             );
           }
 
@@ -2337,11 +2526,30 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
               return (
                 <div
                   key={index}
-                  className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 ${className} text-slate-900 leading-relaxed`}
+                  className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative ${className} text-slate-900 leading-relaxed ${
+                    isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                  } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                   onClick={() => handleLineClick(index)}
-                  style={{ paddingLeft: `${8 + indentPx}px`, ...borderStyle }}
+                  style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragEnd={handleDragEnd}
+                  onMouseEnter={() => setHoveredLineIndex(index)}
+                  onMouseLeave={() => setHoveredLineIndex(null)}
                 >
-                  {renderInlineMarkdown(text)}
+                  <div
+                    className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                      isHovered ? 'opacity-100' : ''
+                    }`}
+                    style={{ left: `${8 + indentPx}px` }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <GripVertical size={14} className="text-slate-400" />
+                  </div>
+                  <span>{renderInlineMarkdown(text)}</span>
                 </div>
               );
             }
@@ -2357,23 +2565,42 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
             return (
               <div
                 key={index}
-                className="min-h-[1.75rem] cursor-text hover:bg-slate-50/50 flex items-center gap-2.5 text-gray-800 leading-relaxed transition-colors"
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center gap-1.5 text-gray-800 leading-relaxed transition-colors ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
-                style={{ paddingLeft: `${8 + indentPx}px`, ...borderStyle }}
+                style={{ paddingLeft: `${8 + indentPx + 20 - 32}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
               >
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
                 {hasChildren && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleListCollapse(index);
                     }}
-                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded"
+                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded ml-2"
                     title={isCollapsed ? 'Expand' : 'Collapse'}
                   >
                     {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                   </button>
                 )}
-                {!hasChildren && <span className="w-4" />}
+                {!hasChildren && <span className="w-3 ml-2" />}
                 <input
                   type="checkbox"
                   checked={isChecked}
@@ -2400,10 +2627,29 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
             return (
               <div
                 key={index}
-                className="min-h-[1.75rem] cursor-text hover:bg-slate-50/50 flex items-center gap-2.5 text-gray-800 leading-relaxed transition-colors"
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center gap-2.5 text-gray-800 leading-relaxed transition-colors ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
-                style={{ paddingLeft: `${8 + indentPx}px`, ...borderStyle }}
+                style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
               >
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
                 {hasChildren && (
                   <button
                     onClick={(e) => {
@@ -2433,10 +2679,29 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
             return (
               <div
                 key={index}
-                className="min-h-[1.75rem] cursor-text hover:bg-slate-50/50 flex items-center gap-2.5 text-gray-800 leading-relaxed transition-colors"
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center gap-2.5 text-gray-800 leading-relaxed transition-colors ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
-                style={{ paddingLeft: `${8 + indentPx}px`, ...borderStyle }}
+                style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
               >
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
                 {hasChildren && (
                   <button
                     onClick={(e) => {
@@ -2463,11 +2728,30 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
             return (
               <div
                 key={index}
-                className="min-h-[1.75rem] cursor-text hover:bg-slate-50/50 border-l-4 border-slate-300 pl-4 py-1 my-1 text-gray-800 italic leading-relaxed transition-colors"
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative border-l-4 border-slate-300 pl-4 py-1 my-1 text-gray-800 italic leading-relaxed transition-colors ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
-                style={{ paddingLeft: `${16 + indentPx}px`, ...borderStyle }}
+                style={{ paddingLeft: `${16 + indentPx + 20}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
               >
-                {renderInlineMarkdown(text)}
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
+                <span>{renderInlineMarkdown(text)}</span>
               </div>
             );
           }
@@ -2476,11 +2760,30 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
           return (
             <div
               key={index}
-              className="min-h-[1.75rem] cursor-text hover:bg-slate-50/50 text-gray-800 leading-relaxed transition-colors"
+              className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative text-gray-800 leading-relaxed transition-colors ${
+                isDragged || isInDraggedGroup ? 'opacity-50' : ''
+              } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
               onClick={() => handleLineClick(index)}
-              style={{ paddingLeft: `${8 + indentPx}px`, ...borderStyle }}
+              style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              onMouseEnter={() => setHoveredLineIndex(index)}
+              onMouseLeave={() => setHoveredLineIndex(null)}
             >
-              {renderInlineMarkdown(trimmed)}
+              <div
+                className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                  isHovered ? 'opacity-100' : ''
+                }`}
+                style={{ left: `${8 + indentPx}px` }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <GripVertical size={14} className="text-slate-400" />
+              </div>
+              <span>{renderInlineMarkdown(trimmed)}</span>
             </div>
           );
         })}
