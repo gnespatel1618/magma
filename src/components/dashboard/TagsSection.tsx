@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link2 } from 'lucide-react';
+import { getTagColor } from '../../lib/tagColors';
 
 /**
  * Tags section component displaying all hashtags found in notes.
@@ -14,15 +15,18 @@ export const TagsSection: React.FC<{ tags: Set<string> }> = ({ tags }) => {
       </div>
       {tags.size > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {Array.from(tags).map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold bg-rose-light text-rose-dark border border-rose-light hover:bg-rose-light/80 cursor-pointer transition-colors"
-              title={`Click to filter notes with #${tag}`}
-            >
-              #{tag}
-            </span>
-          ))}
+          {Array.from(tags).map((tag) => {
+            const colors = getTagColor(tag);
+            return (
+              <span
+                key={tag}
+                className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ${colors.bg} ${colors.text} ${colors.border} ${colors.hover} cursor-pointer transition-colors`}
+                title={`Click to filter notes with #${tag}`}
+              >
+                #{tag}
+              </span>
+            );
+          })}
         </div>
       ) : (
         <div className="text-sm text-slate-500 italic">

@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import { parseTasksFromMarkdown, updateTaskStatus, type ParsedTask } from './lib/taskParser';
 import { extractHashtags } from './lib/tagParser';
+import { getTagColor, getInlineTagColor } from './lib/tagColors';
+import { buildBacklinksIndex, getBacklinks } from './lib/backlinks';
 import { NoteTree } from './components/notes/NoteTree';
 import { Logo } from './components/ui/Logo';
 import { SettingsPage } from './components/SettingsPage';
@@ -84,6 +86,7 @@ function App() {
   const [taskFilterStatus, setTaskFilterStatus] = useState<'todo' | 'doing' | 'done' | ''>('');
   const [taskSortBy, setTaskSortBy] = useState<'due' | 'priority' | 'owner' | 'project' | 'status' | 'title'>('due');
   const [taskSortOrder, setTaskSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [backlinksIndex, setBacklinksIndex] = useState<Map<string, NoteMeta[]>>(new Map());
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const notesRef = useRef<NoteMeta[]>([]);
@@ -241,6 +244,18 @@ function App() {
     const list = (await window.appBridge?.listNotes?.(vault)) ?? [];
     setNotes(list);
     await refreshAllTasks(vault, list);
+    
+    // Build backlinks index
+    try {
+      const index = await buildBacklinksIndex(
+        list,
+        async (path: string) => (await window.appBridge?.readNote?.(path)) ?? ''
+      );
+      setBacklinksIndex(index);
+    } catch (error) {
+      console.error('Error building backlinks index:', error);
+    }
+    
     if (list[0]) {
       await openNote(list[0]);
     } else {
@@ -372,6 +387,19 @@ function App() {
     setTasks(parseTasksFromMarkdown(content));
     isInitialLoadRef.current = true; // Mark as initial load
     setSaveStatus('idle'); // Reset save status when opening a new note
+    
+    // Rebuild backlinks index when opening a note (in case content changed on disk)
+    if (vaultPath && notesRef.current.length > 0) {
+      try {
+        const index = await buildBacklinksIndex(
+          notesRef.current,
+          async (path: string) => (await window.appBridge?.readNote?.(path)) ?? ''
+        );
+        setBacklinksIndex(index);
+      } catch (error) {
+        console.error('Error rebuilding backlinks index when opening note:', error);
+      }
+    }
   };
 
   const createNote = async () => {
@@ -582,6 +610,25 @@ function App() {
       await window.appBridge?.writeNote?.(currentNote.path, currentContent);
       setTasks(parseTasksFromMarkdown(currentContent));
       
+      // Rebuild backlinks index when note is saved
+      if (currentVaultPath && notesRef.current.length > 0) {
+        try {
+          const index = await buildBacklinksIndex(
+            notesRef.current,
+            async (path: string) => {
+              // Use current content if it's the note being saved
+              if (path === currentNote.path) {
+                return currentContent;
+              }
+              return (await window.appBridge?.readNote?.(path)) ?? '';
+            }
+          );
+          setBacklinksIndex(index);
+        } catch (error) {
+          console.error('Error rebuilding backlinks index:', error);
+        }
+      }
+      
       // Only update tags and do full refresh on manual save (not auto-save)
       // This prevents state update loops during auto-save
       if (!skipFullRefresh && currentVaultPath && !isRefreshingRef.current) {
@@ -639,18 +686,37 @@ function App() {
         if (note && vault && content !== undefined) {
           // Direct save without going through saveNote to avoid state update loops
           window.appBridge?.writeNote?.(note.path, content)
-            .then(() => {
+            .then(async () => {
               // Update save status briefly to show autosave happened
               setSaveStatus('saved');
               setTimeout(() => {
                 setSaveStatus('idle');
               }, 1500);
               
+              // Rebuild backlinks index after autosave
+              const currentNotes = notesRef.current;
+              if (currentNotes.length > 0) {
+                try {
+                  const index = await buildBacklinksIndex(
+                    currentNotes,
+                    async (path: string) => {
+                      // Use current content if it's the note being saved
+                      if (path === note.path) {
+                        return content;
+                      }
+                      return (await window.appBridge?.readNote?.(path)) ?? '';
+                    }
+                  );
+                  setBacklinksIndex(index);
+                } catch (error) {
+                  console.error('Error rebuilding backlinks index after autosave:', error);
+                }
+              }
+              
               // Refresh all tasks in the dashboard after autosave
               // Use a small delay to ensure file is written and to avoid blocking
               setTimeout(() => {
                 // Use the current notes list from state to ensure we have all notes
-                const currentNotes = notesRef.current;
                 if (currentNotes.length > 0 && !isRefreshingRef.current) {
                   refreshAllTasks(vault, currentNotes).catch((err) => {
                     console.error('Failed to refresh tasks after autosave:', err);
@@ -780,26 +846,26 @@ function App() {
           )}
         </Sidebar>
 
-        <main className="row-start-2 col-start-2 col-span-2 bg-slate-50 overflow-hidden">
+        <main className="row-start-2 col-start-2 bg-slate-50 overflow-hidden">
           {section === 'dashboard' && (
-            <div className="h-full overflow-y-auto px-5 py-5 space-y-4">
+            <div className="h-full overflow-y-auto px-5 py-5 space-y-2">
               {/* Filter and Search Controls */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <Search size={16} /> Filter & Search Tasks
+              <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-soft space-y-1.5">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                  <Search size={14} /> Filter & Search Tasks
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
                   <input
                     type="text"
                     placeholder="Search tasks..."
                     value={taskSearchQuery}
                     onChange={(e) => setTaskSearchQuery(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   />
                   <select
                     value={taskFilterOwner}
                     onChange={(e) => setTaskFilterOwner(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Owners</option>
                     {uniqueOwners.map(owner => (
@@ -809,7 +875,7 @@ function App() {
                   <select
                     value={taskFilterProject}
                     onChange={(e) => setTaskFilterProject(e.target.value)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Projects</option>
                     {uniqueProjects.map(project => (
@@ -819,7 +885,7 @@ function App() {
                   <select
                     value={taskFilterPriority}
                     onChange={(e) => setTaskFilterPriority(e.target.value as 'low' | 'med' | 'high' | '')}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Priorities</option>
                     <option value="high">High</option>
@@ -827,11 +893,11 @@ function App() {
                     <option value="low">Low</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <select
                     value={taskFilterStatus}
                     onChange={(e) => setTaskFilterStatus(e.target.value as 'todo' | 'doing' | 'done' | '')}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="">All Statuses</option>
                     <option value="todo">Todo</option>
@@ -841,7 +907,7 @@ function App() {
                   <select
                     value={taskSortBy}
                     onChange={(e) => setTaskSortBy(e.target.value as typeof taskSortBy)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800 outline-none focus:border-rose-brand focus:ring-2 focus:ring-rose-light"
                   >
                     <option value="due">Sort by Due Date</option>
                     <option value="priority">Sort by Priority</option>
@@ -852,7 +918,7 @@ function App() {
                   </select>
                   <button
                     onClick={() => setTaskSortOrder(taskSortOrder === 'asc' ? 'desc' : 'asc')}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
                     title="Toggle sort order"
                   >
                     {taskSortOrder === 'asc' ? '↑' : '↓'} {taskSortOrder === 'asc' ? 'Ascending' : 'Descending'}
@@ -866,7 +932,7 @@ function App() {
                         setTaskFilterPriority('');
                         setTaskFilterStatus('');
                       }}
-                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-gray-800 hover:bg-slate-50 transition-colors"
                     >
                       Clear Filters
                     </button>
@@ -879,11 +945,11 @@ function App() {
 
               {/* Due Soon Cards */}
               {dueSoonTasks.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <div className="flex items-center gap-2 text-slate-800 font-semibold text-sm mb-3">
-                    <Clock3 size={16} /> Due Soon (Next 7 Days)
+                <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-soft">
+                  <div className="flex items-center gap-2 text-slate-800 font-semibold text-xs mb-1.5">
+                    <Clock3 size={14} /> Due Soon (Next 7 Days)
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {dueSoonTasks.slice(0, 6).map((task) => (
                       <div
                         key={task.id}
@@ -891,13 +957,13 @@ function App() {
                           const nextStatus = task.status === 'todo' ? 'doing' : task.status === 'doing' ? 'done' : 'todo';
                           updateTaskStatusInFile(task, nextStatus);
                         }}
-                        className="rounded-lg border border-amber-200 bg-amber-50 p-3 shadow-sm space-y-2 cursor-pointer hover:bg-amber-100 transition-colors"
+                        className="rounded-lg border border-amber-200 bg-amber-50 p-1.5 shadow-sm space-y-1 cursor-pointer hover:bg-amber-100 transition-colors"
                       >
                         <div className="flex items-center justify-between">
-                          <p className="font-semibold text-slate-900 text-sm">{task.title}</p>
+                          <p className="font-semibold text-slate-900 text-xs truncate">{task.title}</p>
                           {task.priority && badge(task.priority, priorityTone[task.priority])}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-800">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-800">
                           {task.owner && <span>@{task.owner}</span>}
                           {task.project && (
                             <>
@@ -906,10 +972,10 @@ function App() {
                             </>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {badge(task.status, statusTone[task.status])}
-                          <div className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 rounded-full px-2 py-1">
-                            <Clock3 size={12} /> {task.due}
+                          <div className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">
+                            <Clock3 size={10} /> {task.due}
                           </div>
                         </div>
                         <div className="text-xs text-slate-500 italic">Click to change status</div>
@@ -1029,15 +1095,18 @@ function App() {
                 </div>
                 {allTags.size > 0 ? (
                   <div className="flex flex-wrap gap-2">
-                    {Array.from(allTags).map(tag => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold bg-rose-light text-rose-dark border border-rose-light hover:bg-rose-light/80 cursor-pointer transition-colors"
-                        title={`Click to filter notes with #${tag}`}
-                      >
-                        #{tag}
-                      </span>
-                    ))}
+                    {Array.from(allTags).map(tag => {
+                      const colors = getTagColor(tag);
+                      return (
+                        <span
+                          key={tag}
+                          className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold ${colors.bg} ${colors.text} ${colors.border} ${colors.hover} cursor-pointer transition-colors`}
+                          title={`Click to filter notes with #${tag}`}
+                        >
+                          #{tag}
+                        </span>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-sm text-slate-500 italic">
@@ -1064,7 +1133,7 @@ function App() {
           )}
 
           {section === 'notes' && (
-            <div className="row-start-2 col-start-2 flex flex-col h-full overflow-hidden">
+            <div className="flex flex-col h-full overflow-hidden">
               {/* Note Editor Area */}
               <div className="flex-1 flex flex-col bg-white border border-slate-200 overflow-hidden">
                 {selectedNote ? (
@@ -1104,14 +1173,17 @@ function App() {
                       return currentTags.length > 0 && (
                         <div className="px-4 py-2 border-b border-slate-200 flex flex-wrap items-center gap-2">
                           <span className="text-xs font-semibold text-gray-800">Tags:</span>
-                          {currentTags.map(tag => (
-                            <span
-                              key={tag}
-                              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-rose-light text-rose-dark border border-rose-light"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
+                          {currentTags.map(tag => {
+                            const colors = getTagColor(tag);
+                            return (
+                              <span
+                                key={tag}
+                                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text} ${colors.border}`}
+                              >
+                                #{tag}
+                              </span>
+                            );
+                          })}
                         </div>
                       );
                     })()}
@@ -1130,27 +1202,6 @@ function App() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-          
-          {/* Backlinks Panel */}
-          {section === 'notes' && (
-            <div className="row-start-2 col-start-3 h-full overflow-hidden">
-              <BacklinksPanel 
-                selectedNote={selectedNote}
-                allNotes={notes}
-                noteContent={noteContent}
-              />
-            </div>
-          )}
-          
-          {/* Status Bar */}
-          {section === 'notes' && (
-            <div className="row-start-3 col-span-3">
-              <StatusBar 
-                noteContent={noteContent}
-                backlinksCount={0}
-              />
             </div>
           )}
 
@@ -1272,11 +1323,11 @@ function App() {
 
               {/* Due Soon Cards */}
               {dueSoonTasks.length > 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft">
-                  <div className="flex items-center gap-2 text-slate-800 font-semibold text-sm mb-3">
-                    <Clock3 size={16} /> Due Soon (Next 7 Days)
+                <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-soft">
+                  <div className="flex items-center gap-2 text-slate-800 font-semibold text-xs mb-1.5">
+                    <Clock3 size={14} /> Due Soon (Next 7 Days)
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                     {dueSoonTasks.slice(0, 6).map((task) => (
                       <div
                         key={task.id}
@@ -1284,13 +1335,13 @@ function App() {
                           const nextStatus = task.status === 'todo' ? 'doing' : task.status === 'doing' ? 'done' : 'todo';
                           updateTaskStatusInFile(task, nextStatus);
                         }}
-                        className="rounded-lg border border-amber-200 bg-amber-50 p-3 shadow-sm space-y-2 cursor-pointer hover:bg-amber-100 transition-colors"
+                        className="rounded-lg border border-amber-200 bg-amber-50 p-1.5 shadow-sm space-y-1 cursor-pointer hover:bg-amber-100 transition-colors"
                       >
                         <div className="flex items-center justify-between">
-                          <p className="font-semibold text-slate-900 text-sm">{task.title}</p>
+                          <p className="font-semibold text-slate-900 text-xs truncate">{task.title}</p>
                           {task.priority && badge(task.priority, priorityTone[task.priority])}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-800">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-800">
                           {task.owner && <span>@{task.owner}</span>}
                           {task.project && (
                             <>
@@ -1299,10 +1350,10 @@ function App() {
                             </>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {badge(task.status, statusTone[task.status])}
-                          <div className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 rounded-full px-2 py-1">
-                            <Clock3 size={12} /> {task.due}
+                          <div className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">
+                            <Clock3 size={10} /> {task.due}
                           </div>
                         </div>
                         <div className="text-xs text-slate-500 italic">Click to change status</div>
@@ -1417,6 +1468,29 @@ function App() {
             </div>
           )}
         </main>
+
+        {/* Backlinks Panel - Only visible in notes section */}
+        {section === 'notes' && (
+          <div className="row-start-2 col-start-3 h-full overflow-hidden">
+            <BacklinksPanel 
+              selectedNote={selectedNote}
+              allNotes={notes}
+              noteContent={noteContent}
+              backlinksIndex={backlinksIndex}
+              onNoteClick={openNote}
+            />
+          </div>
+        )}
+
+        {/* Status Bar - Only visible in notes section */}
+        {section === 'notes' && (
+          <div className="row-start-3 col-start-2 col-span-2">
+            <StatusBar 
+              noteContent={noteContent}
+              backlinksCount={selectedNote ? getBacklinks(selectedNote, backlinksIndex).length : 0}
+            />
+          </div>
+        )}
       </div>
 
       {showNewNoteModal && (
@@ -1542,9 +1616,11 @@ const renderInlineMarkdown = (text: string): React.ReactNode => {
     // Hashtag #tag (only if not in code)
     const hashtagMatch = remaining.match(/^#([a-zA-Z0-9_-]+)/);
     if (hashtagMatch) {
+      const tagName = hashtagMatch[1];
+      const tagColor = getInlineTagColor(tagName);
       parts.push(
-        <span key={key++} className="text-rose-brand font-semibold">
-          #{hashtagMatch[1]}
+        <span key={key++} className={`${tagColor} font-semibold`}>
+          #{tagName}
         </span>
       );
       remaining = remaining.slice(hashtagMatch[0].length);
@@ -1555,8 +1631,10 @@ const renderInlineMarkdown = (text: string): React.ReactNode => {
     const wikilinkTagMatch = remaining.match(/^\[\[([^\]|]+?)\]\]/);
     if (wikilinkTagMatch) {
       const tagName = wikilinkTagMatch[1].split('|')[0].trim(); // Handle aliases like [[tag|alias]]
+      const normalizedTagName = tagName.toLowerCase().replace(/\s+/g, '-');
+      const tagColor = getInlineTagColor(normalizedTagName);
       parts.push(
-        <span key={key++} className="text-rose-brand font-semibold">
+        <span key={key++} className={`${tagColor} font-semibold`}>
           [[{tagName}]]
         </span>
       );
