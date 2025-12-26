@@ -2768,11 +2768,11 @@ const LivePreviewEditor = ({
             return (
               <div
                 key={index}
-                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center gap-1.5 text-gray-800 leading-relaxed transition-colors ${
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center text-gray-800 leading-relaxed transition-colors ${
                   isDragged || isInDraggedGroup ? 'opacity-50' : ''
                 } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
-                style={{ paddingLeft: `${8 + indentPx + 20 - 32}px`, ...borderStyle }}
+                style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
                 onDragOver={(e) => handleDragOver(e, index)}
@@ -2797,13 +2797,12 @@ const LivePreviewEditor = ({
                       e.stopPropagation();
                       toggleListCollapse(index);
                     }}
-                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded ml-2"
+                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded mr-1"
                     title={isCollapsed ? 'Expand' : 'Collapse'}
                   >
                     {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                   </button>
                 )}
-                {!hasChildren && <span className="w-3 ml-2" />}
                 <input
                   type="checkbox"
                   checked={isChecked}
@@ -2812,7 +2811,7 @@ const LivePreviewEditor = ({
                     const newLine = line.replace(/\[([ x])\]/, `[${isChecked ? ' ' : 'x'}]`);
                     updateLine(index, newLine);
                   }}
-                  className="accent-indigo-600 cursor-pointer flex-shrink-0 w-4 h-4 mt-0.5"
+                  className="accent-indigo-600 cursor-pointer flex-shrink-0 w-4 h-4 mr-1.5"
                   onClick={(e) => e.stopPropagation()}
                 />
                 <span className={`flex-1 ${isChecked ? 'line-through text-slate-500' : ''}`}>
@@ -2830,7 +2829,7 @@ const LivePreviewEditor = ({
             return (
               <div
                 key={index}
-                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center gap-2.5 text-gray-800 leading-relaxed transition-colors ${
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center text-gray-800 leading-relaxed transition-colors ${
                   isDragged || isInDraggedGroup ? 'opacity-50' : ''
                 } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
@@ -2859,14 +2858,13 @@ const LivePreviewEditor = ({
                       e.stopPropagation();
                       toggleListCollapse(index);
                     }}
-                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded"
+                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded mr-1"
                     title={isCollapsed ? 'Expand' : 'Collapse'}
                   >
                     {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                   </button>
                 )}
-                {!hasChildren && <span className="w-4" />}
-                <span className="text-slate-400 flex-shrink-0">•</span>
+                <span className="text-slate-400 flex-shrink-0 mr-1.5">•</span>
                 <span className="flex-1">{renderInlineMarkdown(text)}</span>
               </div>
             );
@@ -2882,7 +2880,7 @@ const LivePreviewEditor = ({
             return (
               <div
                 key={index}
-                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center gap-2.5 text-gray-800 leading-relaxed transition-colors ${
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative flex items-center text-gray-800 leading-relaxed transition-colors ${
                   isDragged || isInDraggedGroup ? 'opacity-50' : ''
                 } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
                 onClick={() => handleLineClick(index)}
@@ -2911,14 +2909,13 @@ const LivePreviewEditor = ({
                       e.stopPropagation();
                       toggleListCollapse(index);
                     }}
-                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded"
+                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-slate-200 rounded mr-1"
                     title={isCollapsed ? 'Expand' : 'Collapse'}
                   >
                     {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
                   </button>
                 )}
-                {!hasChildren && <span className="w-4" />}
-                <span className="text-slate-500 flex-shrink-0 text-sm">{number}.</span>
+                <span className="text-slate-500 flex-shrink-0 text-sm mr-1.5">{number}.</span>
                 <span className="flex-1">{renderInlineMarkdown(text)}</span>
               </div>
             );
