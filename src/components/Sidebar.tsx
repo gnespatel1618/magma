@@ -10,6 +10,7 @@ import {
   X,
   FileText,
   Network,
+  Brain,
   Calendar,
   Minus,
   HelpCircle,
@@ -34,9 +35,9 @@ const getFolderName = (path: string | null): string => {
  */
 export const Sidebar: React.FC<{
   vaultPath: string | null;
-  currentSection: 'dashboard' | 'notes' | 'tasks' | 'mindmap' | 'settings';
+  currentSection: 'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'settings';
   onOpenVault: () => void;
-  onSectionChange: (section: 'dashboard' | 'notes' | 'tasks' | 'mindmap' | 'settings') => void;
+  onSectionChange: (section: 'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'settings') => void;
   children?: React.ReactNode;
 }> = ({ vaultPath, currentSection, onOpenVault, onSectionChange, children }) => {
   return (
@@ -88,6 +89,12 @@ export const Sidebar: React.FC<{
         <div className="flex items-center gap-1">
           <IconButton 
             icon={<Network size={16} />} 
+            active={currentSection === 'graph'}
+            onClick={() => onSectionChange('graph')}
+            title="Graph View"
+          />
+          <IconButton 
+            icon={<Brain size={16} />} 
             active={currentSection === 'mindmap'}
             onClick={() => onSectionChange('mindmap')}
             title="Mind Map"

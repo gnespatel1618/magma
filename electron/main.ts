@@ -197,9 +197,12 @@ const scanVault = (
   
   const entries = fs.readdirSync(fullPath, { withFileTypes: true });
   
+  // Folders to hide from the notes tree
+  const hiddenFolders = ['.git', '.mindmaps', 'assets'];
+  
   for (const entry of entries) {
-    // Skip .git folder
-    if (entry.name === '.git') {
+    // Skip hidden folders
+    if (hiddenFolders.includes(entry.name)) {
       continue;
     }
     
@@ -608,6 +611,167 @@ ipcMain.handle('media:saveClipboardImage', async (_event) => {
       filePath: tempFilePath,
       message: 'Image saved from clipboard' 
     };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` 
+    };
+  }
+});
+
+// ============================================
+// Mind Map File Operations
+// ============================================
+
+/**
+ * Gets the path to the mindmaps folder in the vault.
+ * Creates the folder if it doesn't exist.
+ */
+const getMindmapsFolder = (vaultPath: string): string => {
+  const mindmapsDir = path.join(vaultPath, '.mindmaps');
+  if (!fs.existsSync(mindmapsDir)) {
+    fs.mkdirSync(mindmapsDir, { recursive: true });
+  }
+  return mindmapsDir;
+};
+
+/**
+ * IPC handler for listing all mind maps in the vault.
+ * 
+ * @param _event - IPC event object
+ * @param vaultPath - The path to the vault directory
+ * @returns Array of mind map metadata
+ */
+ipcMain.handle('mindmap:list', async (_event, vaultPath: string) => {
+  try {
+    if (!vaultPath || !fs.existsSync(vaultPath)) {
+      return { ok: false, message: 'Invalid vault path', mindmaps: [] };
+    }
+    
+    const mindmapsDir = getMindmapsFolder(vaultPath);
+    const files = fs.readdirSync(mindmapsDir);
+    
+    const mindmaps = files
+      .filter(file => file.endsWith('.mindmap.json'))
+      .map(file => {
+        const filePath = path.join(mindmapsDir, file);
+        const stats = fs.statSync(filePath);
+        const name = file.replace('.mindmap.json', '');
+        return {
+          id: name,
+          name: name,
+          path: filePath,
+          updatedAt: stats.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    
+    return { ok: true, mindmaps };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}`,
+      mindmaps: [] 
+    };
+  }
+});
+
+/**
+ * IPC handler for saving a mind map to the vault.
+ * 
+ * @param _event - IPC event object
+ * @param vaultPath - The path to the vault directory
+ * @param name - The name of the mind map
+ * @param data - The mind map data to save
+ * @returns Result object with success status
+ */
+ipcMain.handle('mindmap:save', async (_event, vaultPath: string, name: string, data: unknown) => {
+  try {
+    if (!vaultPath || !fs.existsSync(vaultPath)) {
+      return { ok: false, message: 'Invalid vault path' };
+    }
+    
+    const mindmapsDir = getMindmapsFolder(vaultPath);
+    const safeName = name
+      .replace(/[^a-zA-Z0-9-_ ]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase() || 'untitled';
+    
+    const filePath = path.join(mindmapsDir, `${safeName}.mindmap.json`);
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    
+    return { 
+      ok: true, 
+      message: `Mind map "${name}" saved`,
+      path: filePath,
+      id: safeName
+    };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` 
+    };
+  }
+});
+
+/**
+ * IPC handler for loading a mind map from the vault.
+ * 
+ * @param _event - IPC event object
+ * @param vaultPath - The path to the vault directory
+ * @param name - The name of the mind map to load
+ * @returns Result object with the mind map data
+ */
+ipcMain.handle('mindmap:load', async (_event, vaultPath: string, name: string) => {
+  try {
+    if (!vaultPath || !fs.existsSync(vaultPath)) {
+      return { ok: false, message: 'Invalid vault path' };
+    }
+    
+    const mindmapsDir = getMindmapsFolder(vaultPath);
+    const filePath = path.join(mindmapsDir, `${name}.mindmap.json`);
+    
+    if (!fs.existsSync(filePath)) {
+      return { ok: false, message: 'Mind map not found' };
+    }
+    
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(content);
+    
+    return { ok: true, data };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` 
+    };
+  }
+});
+
+/**
+ * IPC handler for deleting a mind map from the vault.
+ * 
+ * @param _event - IPC event object
+ * @param vaultPath - The path to the vault directory
+ * @param name - The name of the mind map to delete
+ * @returns Result object with success status
+ */
+ipcMain.handle('mindmap:delete', async (_event, vaultPath: string, name: string) => {
+  try {
+    if (!vaultPath || !fs.existsSync(vaultPath)) {
+      return { ok: false, message: 'Invalid vault path' };
+    }
+    
+    const mindmapsDir = getMindmapsFolder(vaultPath);
+    const filePath = path.join(mindmapsDir, `${name}.mindmap.json`);
+    
+    if (!fs.existsSync(filePath)) {
+      return { ok: false, message: 'Mind map not found' };
+    }
+    
+    fs.unlinkSync(filePath);
+    
+    return { ok: true, message: `Mind map "${name}" deleted` };
   } catch (e) {
     return { 
       ok: false, 

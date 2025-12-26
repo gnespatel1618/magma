@@ -40,6 +40,8 @@ import { Breadcrumbs } from './components/notes/Breadcrumbs';
 import { StatusBar } from './components/notes/StatusBar';
 import { Sidebar } from './components/Sidebar';
 import { MindmapCanvas } from './components/mindmap/MindmapCanvas';
+import { MindMapEditor } from './components/mindmap/MindMapEditor';
+import { MindmapList } from './components/mindmap/MindmapList';
 
 const LazyExcalidraw = React.lazy(async () => {
   const mod = await import('@excalidraw/excalidraw');
@@ -78,7 +80,7 @@ function App() {
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<NoteMeta | null>(null);
-  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks' | 'mindmap' | 'settings'>('dashboard');
+  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'settings'>('dashboard');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [allTags, setAllTags] = useState<Set<string>>(new Set());
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>('');
@@ -89,6 +91,8 @@ function App() {
   const [taskSortBy, setTaskSortBy] = useState<'due' | 'priority' | 'owner' | 'project' | 'status' | 'title'>('due');
   const [taskSortOrder, setTaskSortOrder] = useState<'asc' | 'desc'>('asc');
   const [backlinksIndex, setBacklinksIndex] = useState<Map<string, NoteMeta[]>>(new Map());
+  const [currentMindmapId, setCurrentMindmapId] = useState<string | null>(null);
+  const [currentMindmapName, setCurrentMindmapName] = useState<string>('Untitled');
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
   const notesRef = useRef<NoteMeta[]>([]);
@@ -798,53 +802,78 @@ function App() {
           onOpenVault={openVault}
           onSectionChange={setSection}
         >
-          {/* Note Tree in Sidebar - Always visible */}
-          {vaultPath && (
-            <div className="px-2 py-2">
-              <div className="mb-2 flex items-center justify-between px-2">
-                <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Notes</h3>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setShowNewFolderModal(true)}
-                    className="p-1 rounded hover:bg-slate-200 transition-colors"
-                    title="New folder"
-                  >
-                    <Folder size={12} />
-                  </button>
-                  <button
-                    onClick={() => setShowNewNoteModal(true)}
-                    className="p-1 rounded hover:bg-slate-200 transition-colors"
-                    title="New note"
-                  >
-                    <Plus size={12} />
-                  </button>
-                </div>
-              </div>
-              {selectedFolder && (
-                <div className="mx-2 mb-2 flex items-center justify-between px-2 py-1 rounded bg-rose-light border border-rose-light text-xs">
-                  <div className="flex items-center gap-1 text-rose-dark">
-                    <FolderOpen size={10} />
-                    <span className="truncate">Creating in: {selectedFolder.title}</span>
+          {/* Sidebar Content - Notes or Mindmaps based on section */}
+          {section === 'mindmap' ? (
+            <MindmapList
+              vaultPath={vaultPath}
+              currentMindmapId={currentMindmapId}
+              onSelect={async (mindmap) => {
+                setCurrentMindmapId(mindmap.id);
+                setCurrentMindmapName(mindmap.name);
+              }}
+              onDelete={async (mindmap) => {
+                if (!vaultPath) return;
+                const result = await window.appBridge?.deleteMindmap?.(vaultPath, mindmap.id);
+                if (result?.ok) {
+                  if (currentMindmapId === mindmap.id) {
+                    setCurrentMindmapId(null);
+                    setCurrentMindmapName('Untitled');
+                  }
+                }
+              }}
+              onNew={() => {
+                setCurrentMindmapId(null);
+                setCurrentMindmapName('Untitled');
+              }}
+            />
+          ) : (
+            vaultPath && (
+              <div className="px-2 py-2">
+                <div className="mb-2 flex items-center justify-between px-2">
+                  <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Notes</h3>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setShowNewFolderModal(true)}
+                      className="p-1 rounded hover:bg-slate-200 transition-colors"
+                      title="New folder"
+                    >
+                      <Folder size={12} />
+                    </button>
+                    <button
+                      onClick={() => setShowNewNoteModal(true)}
+                      className="p-1 rounded hover:bg-slate-200 transition-colors"
+                      title="New note"
+                    >
+                      <Plus size={12} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setSelectedFolder(null)}
-                    className="text-rose-brand hover:text-rose-dark font-semibold"
-                    title="Deselect folder"
-                  >
-                    ×
-                  </button>
                 </div>
-              )}
-              <NoteTree 
-                items={notes} 
-                selectedNote={selectedNote} 
-                selectedFolder={selectedFolder}
-                onSelect={openNote} 
-                onSelectFolder={setSelectedFolder}
-                onDelete={deleteNote}
-                onRename={renameNote}
-              />
-            </div>
+                {selectedFolder && (
+                  <div className="mx-2 mb-2 flex items-center justify-between px-2 py-1 rounded bg-rose-light border border-rose-light text-xs">
+                    <div className="flex items-center gap-1 text-rose-dark">
+                      <FolderOpen size={10} />
+                      <span className="truncate">Creating in: {selectedFolder.title}</span>
+                    </div>
+                    <button
+                      onClick={() => setSelectedFolder(null)}
+                      className="text-rose-brand hover:text-rose-dark font-semibold"
+                      title="Deselect folder"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                <NoteTree 
+                  items={notes} 
+                  selectedNote={selectedNote} 
+                  selectedFolder={selectedFolder}
+                  onSelect={openNote} 
+                  onSelectFolder={setSelectedFolder}
+                  onDelete={deleteNote}
+                  onRename={renameNote}
+                />
+              </div>
+            )
           )}
         </Sidebar>
 
@@ -1209,16 +1238,16 @@ function App() {
             </div>
           )}
 
-          {section === 'mindmap' && (
+          {section === 'graph' && (
             <div className="h-full p-5">
               <div className="h-full flex flex-col">
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-100 to-pink-100">
-                    <MapIcon size={20} className="text-rose-600" />
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-100 to-blue-100">
+                    <Link2 size={20} className="text-indigo-600" />
                   </div>
                   <div>
-                    <h1 className="text-xl font-bold text-slate-800">Mind Map</h1>
+                    <h1 className="text-xl font-bold text-slate-800">Graph View</h1>
                     <p className="text-sm text-slate-500">
                       Visualize your notes and their connections
                     </p>
@@ -1235,6 +1264,37 @@ function App() {
                     onNoteOpen={(note) => {
                       setSection('notes');
                       openNote(note);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {section === 'mindmap' && (
+            <div className="h-full p-5">
+              <div className="h-full flex flex-col">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100">
+                    <Sparkles size={20} className="text-purple-600" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-800">Mind Map</h1>
+                    <p className="text-sm text-slate-500">
+                      Create and organize your ideas visually
+                    </p>
+                  </div>
+                </div>
+
+                {/* Editor Canvas */}
+                <div className="flex-1 rounded-2xl border border-slate-200 overflow-hidden shadow-soft bg-white">
+                  <MindMapEditor 
+                    vaultPath={vaultPath}
+                    initialMindmapId={currentMindmapId}
+                    onMindmapChange={(id, name) => {
+                      setCurrentMindmapId(id);
+                      setCurrentMindmapName(name);
                     }}
                   />
                 </div>

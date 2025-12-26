@@ -136,5 +136,48 @@ contextBridge.exposeInMainWorld('appBridge', {
    * @returns Promise resolving to operation result with temporary file path
    */
   saveClipboardImage: () => ipcRenderer.invoke('media:saveClipboardImage'),
+
+  // ============================================
+  // Mind Map Operations
+  // ============================================
+
+  /**
+   * Lists all mind maps saved in the vault.
+   * 
+   * @param vaultPath - The path to the vault directory
+   * @returns Promise resolving to array of mind map metadata
+   */
+  listMindmaps: (vaultPath: string) => ipcRenderer.invoke('mindmap:list', vaultPath),
+
+  /**
+   * Saves a mind map to the vault.
+   * 
+   * @param vaultPath - The path to the vault directory
+   * @param name - The name of the mind map
+   * @param data - The mind map data to save
+   * @returns Promise resolving to operation result
+   */
+  saveMindmap: (vaultPath: string, name: string, data: unknown) =>
+    ipcRenderer.invoke('mindmap:save', vaultPath, name, data),
+
+  /**
+   * Loads a mind map from the vault.
+   * 
+   * @param vaultPath - The path to the vault directory
+   * @param name - The name of the mind map to load
+   * @returns Promise resolving to the mind map data
+   */
+  loadMindmap: (vaultPath: string, name: string) =>
+    ipcRenderer.invoke('mindmap:load', vaultPath, name),
+
+  /**
+   * Deletes a mind map from the vault.
+   * 
+   * @param vaultPath - The path to the vault directory
+   * @param name - The name of the mind map to delete
+   * @returns Promise resolving to operation result
+   */
+  deleteMindmap: (vaultPath: string, name: string) =>
+    ipcRenderer.invoke('mindmap:delete', vaultPath, name),
 });
 

@@ -1,5 +1,12 @@
 export {};
 
+interface MindmapMeta {
+  id: string;
+  name: string;
+  path: string;
+  updatedAt: string;
+}
+
 declare global {
   interface Window {
     appBridge?: {
@@ -21,6 +28,11 @@ declare global {
       saveMediaFile?: (vaultPath: string, filePath: string, notePath?: string) => Promise<{ ok: boolean; relativePath?: string; message?: string }>;
       selectMediaFiles?: () => Promise<string[]>;
       saveClipboardImage?: () => Promise<{ ok: boolean; filePath?: string; message?: string }>;
+      // Mind Map Operations
+      listMindmaps?: (vaultPath: string) => Promise<{ ok: boolean; mindmaps: MindmapMeta[]; message?: string }>;
+      saveMindmap?: (vaultPath: string, name: string, data: unknown) => Promise<{ ok: boolean; message?: string; path?: string; id?: string }>;
+      loadMindmap?: (vaultPath: string, name: string) => Promise<{ ok: boolean; data?: unknown; message?: string }>;
+      deleteMindmap?: (vaultPath: string, name: string) => Promise<{ ok: boolean; message?: string }>;
     };
   }
 }
