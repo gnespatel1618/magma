@@ -39,6 +39,7 @@ import { BacklinksPanel } from './components/notes/BacklinksPanel';
 import { Breadcrumbs } from './components/notes/Breadcrumbs';
 import { StatusBar } from './components/notes/StatusBar';
 import { Sidebar } from './components/Sidebar';
+import { MindmapCanvas } from './components/mindmap/MindmapCanvas';
 
 const LazyExcalidraw = React.lazy(async () => {
   const mod = await import('@excalidraw/excalidraw');
@@ -77,7 +78,7 @@ function App() {
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<NoteMeta | null>(null);
-  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks' | 'settings'>('dashboard');
+  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks' | 'mindmap' | 'settings'>('dashboard');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [allTags, setAllTags] = useState<Set<string>>(new Set());
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>('');
@@ -1204,6 +1205,39 @@ function App() {
                     <div className="text-slate-500 text-sm">Select a note to start editing.</div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {section === 'mindmap' && (
+            <div className="h-full p-5">
+              <div className="h-full flex flex-col">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-rose-100 to-pink-100">
+                    <MapIcon size={20} className="text-rose-600" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold text-slate-800">Mind Map</h1>
+                    <p className="text-sm text-slate-500">
+                      Visualize your notes and their connections
+                    </p>
+                  </div>
+                  <div className="ml-auto text-sm text-slate-400">
+                    {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+                  </div>
+                </div>
+
+                {/* Canvas */}
+                <div className="flex-1 rounded-2xl border border-slate-200 overflow-hidden shadow-soft bg-white">
+                  <MindmapCanvas 
+                    notes={notes} 
+                    onNoteOpen={(note) => {
+                      setSection('notes');
+                      openNote(note);
+                    }}
+                  />
+                </div>
               </div>
             </div>
           )}

@@ -9,7 +9,7 @@ import {
   ExternalLink,
   X,
   FileText,
-  Layers,
+  Network,
   Calendar,
   Minus,
   HelpCircle,
@@ -34,9 +34,9 @@ const getFolderName = (path: string | null): string => {
  */
 export const Sidebar: React.FC<{
   vaultPath: string | null;
-  currentSection: 'dashboard' | 'notes' | 'tasks' | 'settings';
+  currentSection: 'dashboard' | 'notes' | 'tasks' | 'mindmap' | 'settings';
   onOpenVault: () => void;
-  onSectionChange: (section: 'dashboard' | 'notes' | 'tasks' | 'settings') => void;
+  onSectionChange: (section: 'dashboard' | 'notes' | 'tasks' | 'mindmap' | 'settings') => void;
   children?: React.ReactNode;
 }> = ({ vaultPath, currentSection, onOpenVault, onSectionChange, children }) => {
   return (
@@ -87,29 +87,15 @@ export const Sidebar: React.FC<{
         {/* Second row of icons */}
         <div className="flex items-center gap-1">
           <IconButton 
-            icon={<FileText size={16} />} 
-            onClick={() => {}}
-            title="Files"
-          />
-          <IconButton 
-            icon={<Layers size={16} />} 
-            onClick={() => {}}
-            title="Graph view"
-          />
-          <IconButton 
-            icon={<LayoutGrid size={16} />} 
-            onClick={() => {}}
-            title="Canvas"
+            icon={<Network size={16} />} 
+            active={currentSection === 'mindmap'}
+            onClick={() => onSectionChange('mindmap')}
+            title="Mind Map"
           />
           <IconButton 
             icon={<Calendar size={16} />} 
             onClick={() => {}}
             title="Calendar"
-          />
-          <IconButton 
-            icon={<Minus size={16} />} 
-            onClick={() => {}}
-            title="Minimize"
           />
         </div>
       </div>
