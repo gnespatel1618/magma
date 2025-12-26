@@ -111,5 +111,30 @@ contextBridge.exposeInMainWorld('appBridge', {
    */
   saveExcalidraw: (vaultPath: string, noteId: string, data: unknown) =>
     ipcRenderer.invoke('excalidraw:save', vaultPath, noteId, data),
+
+  /**
+   * Saves a multimedia file (image, video, audio) to the vault's assets folder.
+   * 
+   * @param vaultPath - The path to the vault directory
+   * @param filePath - The temporary path to the file to save
+   * @param notePath - Optional path to the note file (for organizing assets by note)
+   * @returns Promise resolving to operation result with relative path to saved file
+   */
+  saveMediaFile: (vaultPath: string, filePath: string, notePath?: string) =>
+    ipcRenderer.invoke('media:saveFile', vaultPath, filePath, notePath),
+
+  /**
+   * Opens a file dialog to select multimedia files.
+   * 
+   * @returns Promise resolving to array of selected file paths
+   */
+  selectMediaFiles: () => ipcRenderer.invoke('media:selectFiles'),
+
+  /**
+   * Saves clipboard image to a temporary file.
+   * 
+   * @returns Promise resolving to operation result with temporary file path
+   */
+  saveClipboardImage: () => ipcRenderer.invoke('media:saveClipboardImage'),
 });
 

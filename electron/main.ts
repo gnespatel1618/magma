@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, session } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, session, clipboard, nativeImage } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { URL } from 'url';
 import simpleGit from 'simple-git';
+import * as os from 'os';
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -482,6 +483,136 @@ ipcMain.handle('vault:renameNote', async (_event, oldPath: string, newName: stri
     };
   } catch (e) {
     return { ok: false, message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` };
+  }
+});
+
+/**
+ * IPC handler for saving multimedia files (images, videos, audio) to the vault's assets folder.
+ * Creates an assets folder if it doesn't exist and saves the file with a unique name.
+ * 
+ * @param _event - IPC event object
+ * @param vaultPath - The path to the vault directory
+ * @param filePath - The temporary path to the file to save
+ * @param notePath - Optional path to the note file (for organizing assets by note)
+ * @returns Result object with success status and the relative path to the saved file
+ */
+ipcMain.handle('media:saveFile', async (_event, vaultPath: string, filePath: string, notePath?: string) => {
+  try {
+    if (!vaultPath || !fs.existsSync(vaultPath)) {
+      return { ok: false, message: 'Invalid vault path' };
+    }
+    
+    if (!filePath || !fs.existsSync(filePath)) {
+      return { ok: false, message: 'File does not exist' };
+    }
+
+    // Create assets folder structure
+    // If notePath is provided, create assets folder next to the note
+    // Otherwise, create a global assets folder in the vault root
+    let assetsDir: string;
+    if (notePath && fs.existsSync(notePath)) {
+      const noteDir = path.dirname(notePath);
+      assetsDir = path.join(noteDir, 'assets');
+    } else {
+      assetsDir = path.join(vaultPath, 'assets');
+    }
+    
+    // Create assets directory if it doesn't exist
+    if (!fs.existsSync(assetsDir)) {
+      fs.mkdirSync(assetsDir, { recursive: true });
+    }
+
+    // Get file extension and generate a safe filename
+    const ext = path.extname(filePath);
+    const originalName = path.basename(filePath, ext);
+    const safeName = originalName
+      .replace(/[^a-zA-Z0-9-_ ]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .toLowerCase() || 'file';
+    
+    // Generate unique filename
+    let filename = `${safeName}${ext}`;
+    let counter = 1;
+    while (fs.existsSync(path.join(assetsDir, filename))) {
+      filename = `${safeName}-${counter}${ext}`;
+      counter += 1;
+    }
+    
+    const targetPath = path.join(assetsDir, filename);
+    
+    // Copy the file to the assets folder
+    fs.copyFileSync(filePath, targetPath);
+    
+    // Calculate relative path from vault root
+    const relativePath = path.relative(vaultPath, targetPath);
+    
+    return { 
+      ok: true, 
+      relativePath: relativePath.replace(/\\/g, '/'), // Normalize path separators
+      message: `File saved as ${filename}` 
+    };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` 
+    };
+  }
+});
+
+/**
+ * IPC handler for opening a file dialog to select multimedia files.
+ * 
+ * @param _event - IPC event object
+ * @returns Array of selected file paths, or empty array if cancelled
+ */
+ipcMain.handle('media:selectFiles', async (_event) => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'] },
+      { name: 'Videos', extensions: ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'] },
+      { name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  return result.filePaths || [];
+});
+
+/**
+ * IPC handler for saving clipboard image to a temporary file.
+ * Reads the image from clipboard and saves it to a temp file, then returns the path.
+ * 
+ * @param _event - IPC event object
+ * @returns Result object with success status and the temporary file path
+ */
+ipcMain.handle('media:saveClipboardImage', async (_event) => {
+  try {
+    const image = clipboard.readImage();
+    
+    if (image.isEmpty()) {
+      return { ok: false, message: 'No image in clipboard' };
+    }
+
+    // Create a temporary file path
+    const tempDir = os.tmpdir();
+    const timestamp = Date.now();
+    const tempFilePath = path.join(tempDir, `clipboard-image-${timestamp}.png`);
+    
+    // Save the image to the temp file
+    const pngBuffer = image.toPNG();
+    fs.writeFileSync(tempFilePath, pngBuffer);
+    
+    return { 
+      ok: true, 
+      filePath: tempFilePath,
+      message: 'Image saved from clipboard' 
+    };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` 
+    };
   }
 });
 

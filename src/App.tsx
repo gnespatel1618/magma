@@ -1194,6 +1194,8 @@ function App() {
                       <LivePreviewEditor
                         value={noteContent}
                         onChange={handleNoteContentChange}
+                        vaultPath={vaultPath}
+                        selectedNote={selectedNote}
                       />
                     </div>
                   </>
@@ -1676,7 +1678,17 @@ type CommandType = {
   description: string;
 };
 
-const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next: string) => void }) => {
+const LivePreviewEditor = ({ 
+  value, 
+  onChange, 
+  vaultPath, 
+  selectedNote 
+}: { 
+  value: string; 
+  onChange: (next: string) => void;
+  vaultPath: string | null;
+  selectedNote: NoteMeta | null;
+}) => {
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const [lines, setLines] = useState<string[]>(() => value.split('\n'));
   const [collapsedLines, setCollapsedLines] = useState<Set<number>>(new Set());
@@ -1764,6 +1776,13 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
       icon: <span className="text-base">---</span>,
       insert: (indent) => `${indent}---`,
       description: 'Horizontal rule'
+    },
+    {
+      id: 'image',
+      label: 'Insert Image/Media',
+      icon: <span className="text-base">🖼️</span>,
+      insert: (indent) => `${indent}![alt text](path/to/image.png)`,
+      description: 'Insert image, video, or audio file'
     }
   ];
 
@@ -1810,6 +1829,167 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
       inputRef.current.setSelectionRange(len, len);
     }
   }, [activeLineIndex]);
+
+  // Helper function to handle file uploads
+  const handleFileUpload = async (filePaths: string[]) => {
+    if (!vaultPath) {
+      alert('Please open a vault first');
+      return;
+    }
+
+    if (filePaths.length === 0) {
+      return;
+    }
+
+    try {
+      const insertions: string[] = [];
+      
+      for (const filePath of filePaths) {
+        // Get file extension to determine type
+        const ext = filePath.split('.').pop()?.toLowerCase() || '';
+        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'];
+        const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+        const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'];
+        
+        const isImage = imageExts.includes(ext);
+        const isVideo = videoExts.includes(ext);
+        const isAudio = audioExts.includes(ext);
+        
+        if (!isImage && !isVideo && !isAudio) {
+          continue; // Skip non-media files
+        }
+        
+        // Save the file to the vault
+        const result = await window.appBridge?.saveMediaFile?.(
+          vaultPath,
+          filePath,
+          selectedNote?.path
+        );
+
+        if (result?.ok && result.relativePath) {
+          const fileName = filePath.split(/[/\\]/).pop() || 'file';
+          let markdown = '';
+          if (isImage) {
+            markdown = `![${fileName}](${result.relativePath})`;
+          } else if (isVideo) {
+            markdown = `<video controls src="${result.relativePath}"></video>`;
+          } else if (isAudio) {
+            markdown = `<audio controls src="${result.relativePath}"></audio>`;
+          }
+          
+          if (markdown) {
+            insertions.push(markdown);
+          }
+        }
+      }
+
+      if (insertions.length > 0) {
+        // Insert at the current active line, or at the end if no active line
+        const insertIndex = activeLineIndex !== null ? activeLineIndex + 1 : lines.length;
+        const indent = activeLineIndex !== null ? (lines[activeLineIndex]?.match(/^(\s*)/)?.[1] || '') : '';
+        const newLines = [...lines];
+        
+        // Insert each media file on a new line
+        insertions.forEach((markdown, idx) => {
+          newLines.splice(insertIndex + idx, 0, indent + markdown);
+        });
+        
+        setLines(newLines);
+        const newValue = newLines.join('\n');
+        previousValueRef.current = newValue;
+        previousLinesRef.current = newValue;
+        isInternalUpdateRef.current = true;
+        onChange(newValue);
+        
+        // Set active line to the first inserted line
+        setActiveLineIndex(insertIndex);
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file. Please try again.');
+    }
+  };
+
+  // Handle drag and drop for files
+  const handleFileDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleFileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Get file paths from the dropped files
+    const filePaths: string[] = [];
+    const files = e.dataTransfer.files;
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      // In Electron, dropped files have a path property
+      const filePath = (file as any).path || file.name;
+      if (filePath) {
+        filePaths.push(filePath);
+      }
+    }
+    
+    if (filePaths.length > 0) {
+      await handleFileUpload(filePaths);
+    }
+  };
+
+  // Handle paste events for clipboard images
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    if (!vaultPath) {
+      return; // Let default paste behavior happen if no vault
+    }
+
+    const clipboardData = e.clipboardData;
+    let hasMedia = false;
+    
+    // Check for files in clipboard (from file copy/paste)
+    if (clipboardData.files && clipboardData.files.length > 0) {
+      const filePaths: string[] = [];
+      
+      for (let i = 0; i < clipboardData.files.length; i++) {
+        const file = clipboardData.files[i];
+        // Check if it's an image, video, or audio
+        const type = file.type.toLowerCase();
+        if (type.startsWith('image/') || type.startsWith('video/') || type.startsWith('audio/')) {
+          hasMedia = true;
+          // In Electron, pasted files should have a path property
+          const filePath = (file as any).path;
+          if (filePath) {
+            filePaths.push(filePath);
+          }
+        }
+      }
+      
+      if (filePaths.length > 0) {
+        e.preventDefault();
+        await handleFileUpload(filePaths);
+        return;
+      }
+    }
+
+    // Check for clipboard image (from screenshot or image copy)
+    // This handles cases where the image is in the clipboard but not as a file
+    try {
+      const clipboardResult = await window.appBridge?.saveClipboardImage?.();
+      if (clipboardResult?.ok && clipboardResult.filePath) {
+        e.preventDefault();
+        hasMedia = true;
+        await handleFileUpload([clipboardResult.filePath]);
+        return;
+      }
+    } catch (error) {
+      // If clipboard doesn't have an image, let default paste behavior happen
+      // Don't log errors for normal text paste operations
+    }
+
+    // If no media was found, let the default paste behavior happen (for text)
+    // We don't preventDefault() so text pasting works normally
+  };
 
   const updateLine = (index: number, newText: string) => {
     const next = [...lines];
@@ -1993,8 +2173,26 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
     return false;
   };
 
-  const insertCommand = (command: CommandType) => {
+  const insertCommand = async (command: CommandType) => {
     if (activeLineIndex === null || !inputRef.current) return;
+    
+    // Special handling for image/media command
+    if (command.id === 'image') {
+      setShowCommandMenu(false);
+      setCommandFilter('');
+      
+      if (!vaultPath) {
+        alert('Please open a vault first');
+        return;
+      }
+      
+      // Open file picker
+      const filePaths = await window.appBridge?.selectMediaFiles?.();
+      if (filePaths && filePaths.length > 0) {
+        await handleFileUpload(filePaths);
+      }
+      return;
+    }
     
     const currentText = lines[activeLineIndex] ?? '';
     const cursorPos = inputRef.current.selectionStart ?? 0;
@@ -2332,6 +2530,10 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
       <div
         ref={containerRef}
         className="w-full h-[600px] overflow-y-auto relative"
+        onDragOver={handleFileDragOver}
+        onDrop={handleFileDrop}
+        onPaste={handlePaste}
+        tabIndex={0}
       >
         <div className="px-6 py-4 space-y-0">
         {lines.map((line, index) => {
@@ -2387,6 +2589,7 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
                   value={line}
                   onChange={(e) => updateLine(index, e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
                   onContextMenu={(e) => {
                     // Don't prevent default - let native menu show for spell-checking
                     // stopPropagation prevents parent handlers but allows Electron's handler
@@ -2752,6 +2955,149 @@ const LivePreviewEditor = ({ value, onChange }: { value: string; onChange: (next
                   <GripVertical size={14} className="text-slate-400" />
                 </div>
                 <span>{renderInlineMarkdown(text)}</span>
+              </div>
+            );
+          }
+
+          // Helper to construct file URL for Electron
+          const getFileUrl = (filePath: string): string => {
+            if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('file://')) {
+              return filePath;
+            }
+            if (vaultPath) {
+              // Normalize path separators and construct file:// URL
+              // Handle both Windows and Unix paths
+              const normalizedVault = vaultPath.replace(/\\/g, '/');
+              const normalizedPath = filePath.replace(/\\/g, '/');
+              // Remove leading slash from path if present
+              const cleanPath = normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath;
+              const fullPath = normalizedVault + '/' + cleanPath;
+              // Encode the path properly for file:// URL
+              const encodedPath = fullPath.split('/').map(segment => encodeURIComponent(segment)).join('/');
+              return `file:///${encodedPath}`;
+            }
+            return filePath;
+          };
+
+          // Image markdown: ![alt](path)
+          const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+          if (imageMatch) {
+            const alt = imageMatch[1];
+            const imagePath = imageMatch[2];
+            
+            return (
+              <div
+                key={index}
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
+                onClick={() => handleLineClick(index)}
+                style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
+              >
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
+                <img 
+                  src={getFileUrl(imagePath)}
+                  alt={alt}
+                  className="max-w-full h-auto rounded-lg my-2"
+                  onError={(e) => {
+                    // Fallback if image fails to load
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            );
+          }
+
+          // Video tag: <video controls src="path"></video>
+          const videoMatch = trimmed.match(/^<video\s+controls\s+src="([^"]+)"[^>]*><\/video>$/);
+          if (videoMatch) {
+            const videoPath = videoMatch[1];
+            return (
+              <div
+                key={index}
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
+                onClick={() => handleLineClick(index)}
+                style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
+              >
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
+                <video 
+                  controls 
+                  src={getFileUrl(videoPath)}
+                  className="max-w-full h-auto rounded-lg my-2"
+                />
+              </div>
+            );
+          }
+
+          // Audio tag: <audio controls src="path"></audio>
+          const audioMatch = trimmed.match(/^<audio\s+controls\s+src="([^"]+)"[^>]*><\/audio>$/);
+          if (audioMatch) {
+            const audioPath = audioMatch[1];
+            return (
+              <div
+                key={index}
+                className={`min-h-[1.75rem] cursor-text hover:bg-slate-50/50 group relative ${
+                  isDragged || isInDraggedGroup ? 'opacity-50' : ''
+                } ${isDragOver ? 'border-t-2 border-rose-brand' : ''}`}
+                onClick={() => handleLineClick(index)}
+                style={{ paddingLeft: `${8 + indentPx + 20}px`, ...borderStyle }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
+                onMouseEnter={() => setHoveredLineIndex(index)}
+                onMouseLeave={() => setHoveredLineIndex(null)}
+              >
+                <div
+                  className={`absolute top-0 bottom-0 w-5 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity z-10 ${
+                    isHovered ? 'opacity-100' : ''
+                  }`}
+                  style={{ left: `${8 + indentPx}px` }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={14} className="text-slate-400" />
+                </div>
+                <audio 
+                  controls 
+                  src={getFileUrl(audioPath)}
+                  className="w-full my-2"
+                />
               </div>
             );
           }
