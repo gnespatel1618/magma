@@ -179,5 +179,66 @@ contextBridge.exposeInMainWorld('appBridge', {
    */
   deleteMindmap: (vaultPath: string, name: string) =>
     ipcRenderer.invoke('mindmap:delete', vaultPath, name),
+
+  // ============================================
+  // Web Highlights Operations
+  // ============================================
+
+  /**
+   * Sets the current vault path for web highlight capture.
+   * This is used by the global hotkey to know where to save highlights.
+   * 
+   * @param vaultPath - The path to the current vault
+   * @returns Promise resolving to operation result
+   */
+  setCurrentVaultPath: (vaultPath: string) =>
+    ipcRenderer.invoke('vault:setCurrentPath', vaultPath),
+
+  /**
+   * Lists all web highlight files in the vault.
+   * 
+   * @param vaultPath - The path to the vault directory
+   * @returns Promise resolving to array of highlight file metadata
+   */
+  listHighlights: (vaultPath: string) =>
+    ipcRenderer.invoke('highlights:list', vaultPath),
+
+  /**
+   * Reads the content of a highlight file.
+   * 
+   * @param filePath - The full path to the highlight file
+   * @returns Promise resolving to the file content
+   */
+  readHighlight: (filePath: string) =>
+    ipcRenderer.invoke('highlights:read', filePath),
+
+  /**
+   * Deletes a highlight file.
+   * 
+   * @param filePath - The full path to the highlight file to delete
+   * @returns Promise resolving to operation result
+   */
+  deleteHighlight: (filePath: string) =>
+    ipcRenderer.invoke('highlights:delete', filePath),
+
+  /**
+   * Gets the current hotkey for capturing web highlights.
+   * 
+   * @returns Promise resolving to the hotkey string
+   */
+  getHighlightHotkey: () =>
+    ipcRenderer.invoke('highlights:getHotkey'),
+
+  /**
+   * Registers a callback for when a new highlight is added.
+   * 
+   * @param callback - Function to call when a highlight is added
+   * @returns Function to remove the listener
+   */
+  onHighlightAdded: (callback: (highlight: { text: string; url: string; title: string; domain: string; timestamp: string }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, highlight: { text: string; url: string; title: string; domain: string; timestamp: string }) => callback(highlight);
+    ipcRenderer.on('highlight:added', handler);
+    return () => ipcRenderer.removeListener('highlight:added', handler);
+  },
 });
 

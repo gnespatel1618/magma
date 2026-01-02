@@ -42,6 +42,7 @@ import { Sidebar } from './components/Sidebar';
 import { MindmapCanvas } from './components/mindmap/MindmapCanvas';
 import { MindMapEditor } from './components/mindmap/MindMapEditor';
 import { MindmapList } from './components/mindmap/MindmapList';
+import { WebHighlights } from './components/highlights/WebHighlights';
 
 const LazyExcalidraw = React.lazy(async () => {
   const mod = await import('@excalidraw/excalidraw');
@@ -80,7 +81,7 @@ function App() {
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<NoteMeta | null>(null);
-  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'settings'>('dashboard');
+  const [section, setSection] = useState<'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'highlights' | 'settings'>('dashboard');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [allTags, setAllTags] = useState<Set<string>>(new Set());
   const [taskSearchQuery, setTaskSearchQuery] = useState<string>('');
@@ -230,6 +231,23 @@ function App() {
     };
   }, []);
 
+  // Sync vault path with main process for web highlight capture
+  useEffect(() => {
+    if (vaultPath) {
+      window.appBridge?.setCurrentVaultPath?.(vaultPath);
+    }
+    
+    // Listen for new highlights being added
+    const cleanup = window.appBridge?.onHighlightAdded?.((highlight) => {
+      console.log('Web highlight added:', highlight.domain);
+      // Could show a toast notification here in the future
+    });
+    
+    return () => {
+      cleanup?.();
+    };
+  }, [vaultPath]);
+
   // Refresh tasks when switching to tasks section
   useEffect(() => {
     if (section === 'tasks' && vaultPath && notes.length > 0 && !isRefreshingRef.current) {
@@ -242,6 +260,8 @@ function App() {
     const chosen = await window.appBridge?.openVault?.();
     if (chosen) {
       setVaultPath(chosen);
+      // Set the current vault path for web highlights capture
+      await window.appBridge?.setCurrentVaultPath?.(chosen);
       await loadNotes(chosen);
     }
   };
@@ -1300,6 +1320,10 @@ function App() {
                 </div>
               </div>
             </div>
+          )}
+
+          {section === 'highlights' && (
+            <WebHighlights vaultPath={vaultPath} />
           )}
 
           {section === 'settings' && (

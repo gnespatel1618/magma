@@ -1,9 +1,16 @@
-import { app, BrowserWindow, ipcMain, dialog, Menu, session, clipboard, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Menu, session, clipboard, nativeImage, globalShortcut, Notification } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { URL } from 'url';
 import simpleGit from 'simple-git';
 import * as os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+
+// Track the current vault path for web highlights
+let currentVaultPath: string | null = null;
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -40,7 +47,7 @@ const createWindow = async (): Promise<void> => {
   win.webContents.on('context-menu', (event, params) => {
     // Show native menu for editable elements (inputs, textareas, contenteditable)
     // This includes spell-check suggestions when spellcheck is enabled
-    const isEditable = params.isEditable || params.inputFieldType !== 'none';
+    const isEditable = params.isEditable || (params as { inputFieldType?: string }).inputFieldType !== 'none';
     
     // Debug logging (remove in production)
     if (isEditable && params.misspelledWord) {
@@ -141,6 +148,9 @@ app.whenReady().then(() => {
   // Log available languages for debugging
   console.log('Spell-checker languages set to:', languages);
   
+  // Register global hotkey for web highlights
+  registerHighlightHotkey();
+  
   createWindow();
 
   app.on('activate', () => {
@@ -148,6 +158,11 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+// Unregister global shortcuts when app is about to quit
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {
@@ -778,5 +793,485 @@ ipcMain.handle('mindmap:delete', async (_event, vaultPath: string, name: string)
       message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` 
     };
   }
+});
+
+// ============================================
+// Web Highlights (Browser Capture)
+// ============================================
+
+/**
+ * Gets the path to the web highlights folder in the vault.
+ * Creates the folder if it doesn't exist.
+ */
+const getWebHighlightsFolder = (vaultPath: string): string => {
+  const highlightsDir = path.join(vaultPath, '.web-highlights');
+  if (!fs.existsSync(highlightsDir)) {
+    fs.mkdirSync(highlightsDir, { recursive: true });
+  }
+  return highlightsDir;
+};
+
+/**
+ * Converts a domain to a safe filename.
+ */
+const domainToFilename = (domain: string): string => {
+  return domain
+    .replace(/^www\./, '')
+    .replace(/[^a-zA-Z0-9.-]/g, '-')
+    .toLowerCase();
+};
+
+/**
+ * Appends a highlight to the domain-specific markdown file.
+ */
+const appendHighlight = (vaultPath: string, highlight: {
+  text: string;
+  url: string;
+  title: string;
+  domain: string;
+  timestamp: string;
+}) => {
+  const highlightsDir = getWebHighlightsFolder(vaultPath);
+  const filename = `${domainToFilename(highlight.domain)}.md`;
+  const filePath = path.join(highlightsDir, filename);
+  
+  // Format the highlight as markdown with blockquote
+  const formattedText = highlight.text
+    .split('\n')
+    .map(line => `> ${line}`)
+    .join('\n');
+  
+  const entry = `
+## ${highlight.title}
+
+${formattedText}
+
+- **Source:** [${highlight.url}](${highlight.url})
+- **Saved:** ${new Date(highlight.timestamp).toLocaleString()}
+
+---
+`;
+
+  // Create or append to file
+  if (fs.existsSync(filePath)) {
+    fs.appendFileSync(filePath, entry, 'utf-8');
+  } else {
+    const header = `# Highlights from ${highlight.domain}\n\n`;
+    fs.writeFileSync(filePath, header + entry, 'utf-8');
+  }
+  
+  return { filePath, filename };
+};
+
+/**
+ * Gets the URL from the currently active browser window.
+ * Uses OS-specific scripts to query the frontmost browser.
+ */
+async function getActiveBrowserURL(): Promise<{ url: string; title: string } | null> {
+  try {
+    if (process.platform === 'darwin') {
+      // macOS: Use JavaScript for Automation (JXA) instead of AppleScript
+      // JXA is more robust and doesn't fail when apps aren't installed
+      const script = `
+function run() {
+  const SystemEvents = Application('System Events');
+  const frontProcess = SystemEvents.processes.whose({ frontmost: true })[0];
+  const frontApp = frontProcess.name();
+  
+  // Map of browser names to their scripting approach
+  const chromiumBrowsers = [
+    'Google Chrome', 'Google Chrome Canary', 'Microsoft Edge', 
+    'Brave Browser', 'Chromium', 'Vivaldi', 'Opera'
+  ];
+  
+  try {
+    if (chromiumBrowsers.includes(frontApp)) {
+      // Chromium-based browsers share the same scripting API
+      const browser = Application(frontApp);
+      const win = browser.windows[0];
+      const tab = win.activeTab();
+      return tab.url() + '|||' + tab.title();
+    }
+    
+    if (frontApp === 'Safari') {
+      const safari = Application('Safari');
+      const doc = safari.documents[0];
+      return doc.url() + '|||' + doc.name();
+    }
+    
+    if (frontApp === 'Arc') {
+      // Arc uses a similar API to Chrome
+      try {
+        const arc = Application('Arc');
+        const win = arc.windows[0];
+        const tab = win.activeTab();
+        return tab.url() + '|||' + tab.title();
+      } catch (e) {
+        // Fallback to window title
+        return 'arc://unknown|||' + frontProcess.windows[0].name();
+      }
+    }
+    
+    if (frontApp === 'Firefox') {
+      // Firefox doesn't support URL scripting, use window title
+      return 'firefox://unknown|||' + frontProcess.windows[0].name();
+    }
+    
+    // Fallback: return window title for unknown browsers
+    const windowTitle = frontProcess.windows[0].name();
+    return 'unknown://browser|||' + windowTitle;
+    
+  } catch (e) {
+    // Final fallback
+    try {
+      const windowTitle = frontProcess.windows[0].name();
+      return 'unknown://browser|||' + windowTitle;
+    } catch (e2) {
+      return '';
+    }
+  }
+}
+`;
+      
+      // Write JXA script to temp file
+      const scriptPath = path.join(os.tmpdir(), 'magma-browser-url.js');
+      fs.writeFileSync(scriptPath, script, 'utf-8');
+      
+      const { stdout } = await execAsync(`osascript -l JavaScript "${scriptPath}"`);
+      const output = stdout.trim();
+      if (output && output.includes('|||')) {
+        const [url, title] = output.split('|||');
+        return { url: url.trim(), title: title?.trim() || '' };
+      }
+    } else if (process.platform === 'win32') {
+      // Windows: Use PowerShell to get URL from Chromium browsers via UI Automation
+      const script = `
+        Add-Type -AssemblyName UIAutomationClient
+        Add-Type -AssemblyName System.Windows.Forms
+        
+        Add-Type @"
+          using System;
+          using System.Runtime.InteropServices;
+          public class WinAPI {
+            [DllImport("user32.dll")]
+            public static extern IntPtr GetForegroundWindow();
+            [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+            public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
+            [DllImport("user32.dll")]
+            public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+          }
+"@
+        
+        $hwnd = [WinAPI]::GetForegroundWindow()
+        $title = New-Object System.Text.StringBuilder 256
+        [WinAPI]::GetWindowText($hwnd, $title, 256)
+        $windowTitle = $title.ToString()
+        
+        $processId = 0
+        [WinAPI]::GetWindowThreadProcessId($hwnd, [ref]$processId)
+        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        $processName = if ($process) { $process.ProcessName } else { "" }
+        
+        # Check if it's a browser
+        $browsers = @("chrome", "msedge", "brave", "vivaldi", "opera", "chromium")
+        $isBrowser = $browsers | Where-Object { $processName -like "*$_*" }
+        
+        if ($isBrowser) {
+          $window = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+          $condition = New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Edit
+          )
+          $edit = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+          
+          if ($edit) {
+            try {
+              $pattern = $edit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+              $url = $pattern.Current.Value
+              Write-Output "$url|||$windowTitle"
+            } catch {
+              Write-Output "|||$windowTitle"
+            }
+          } else {
+            Write-Output "|||$windowTitle"
+          }
+        } else {
+          Write-Output ""
+        }
+      `;
+      
+      try {
+        const { stdout } = await execAsync(`powershell -NoProfile -Command "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, {
+          timeout: 5000
+        });
+        const output = stdout.trim();
+        if (output && output.includes('|||')) {
+          const [url, title] = output.split('|||');
+          return { url: url.trim(), title: title?.trim() || '' };
+        }
+      } catch (err) {
+        console.error('PowerShell error:', err);
+      }
+    } else {
+      // Linux: Use xdotool
+      try {
+        const { stdout: windowName } = await execAsync('xdotool getactivewindow getwindowname');
+        const title = windowName.trim();
+        
+        // Try to extract URL from common browser patterns in window title
+        // Many browsers put URL or title - Browser Name format
+        return { url: '', title };
+      } catch (err) {
+        console.error('Linux URL detection error:', err);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to get browser URL:', err);
+  }
+  return null;
+}
+
+/**
+ * Simulates Cmd+C (macOS) or Ctrl+C (Windows/Linux) to copy selected text.
+ * Returns true if successful, false if failed (e.g., no accessibility permissions).
+ */
+async function simulateCopy(): Promise<boolean> {
+  try {
+    if (process.platform === 'darwin') {
+      // macOS: Use AppleScript to simulate Cmd+C
+      // This requires Accessibility permissions in System Preferences
+      await execAsync(`osascript -e 'tell application "System Events" to keystroke "c" using command down'`);
+      return true;
+    } else if (process.platform === 'win32') {
+      // Windows: Use PowerShell to send Ctrl+C
+      await execAsync(`powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^c')"`);
+      return true;
+    } else {
+      // Linux: Use xdotool
+      await execAsync('xdotool key --clearmodifiers ctrl+c');
+      return true;
+    }
+  } catch (err) {
+    // This typically fails on macOS if Accessibility permissions aren't granted
+    console.log('Auto-copy not available (Accessibility permissions may be needed)');
+    return false;
+  }
+}
+
+// Track if we've shown the permissions hint
+let hasShownPermissionsHint = false;
+
+/**
+ * Captures the current selection and active browser info, then saves as a highlight.
+ * Tries to auto-copy, but falls back to reading existing clipboard if permissions are missing.
+ */
+async function captureWebHighlight(): Promise<void> {
+  if (!currentVaultPath) {
+    dialog.showErrorBox('No Vault Open', 'Please open a vault in Magma first to save highlights.');
+    return;
+  }
+
+  // Save current clipboard content
+  const previousClipboard = clipboard.readText();
+  
+  // Try to simulate Cmd+C / Ctrl+C to copy selection
+  const copySucceeded = await simulateCopy();
+  
+  if (copySucceeded) {
+    // Wait for the copy operation to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  // Read the clipboard text
+  const selectedText = clipboard.readText();
+  
+  if (!selectedText || selectedText.trim().length === 0) {
+    // No text in clipboard
+    if (!copySucceeded && !hasShownPermissionsHint) {
+      // First time failure - show helpful message about permissions
+      hasShownPermissionsHint = true;
+      const result = dialog.showMessageBoxSync({
+        type: 'info',
+        title: 'Accessibility Permission Needed',
+        message: 'For automatic text capture, Magma needs Accessibility permissions.',
+        detail: 'Go to: System Preferences → Privacy & Security → Accessibility → Add Magma\n\nAlternatively, you can copy text manually (Cmd+C) before pressing the hotkey.',
+        buttons: ['Open System Preferences', 'I\'ll Copy Manually'],
+        defaultId: 0
+      });
+      
+      if (result === 0) {
+        // Open System Preferences to Accessibility
+        execAsync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+      }
+    } else {
+      dialog.showErrorBox('No Text Selected', 'Please select and copy (Cmd+C) some text first, then press the hotkey.');
+    }
+    return;
+  }
+
+  // Get browser URL and title
+  const browserInfo = await getActiveBrowserURL();
+  
+  let url = 'unknown://clipboard';
+  let title = 'Clipboard Capture';
+  let domain = 'clipboard';
+  
+  if (browserInfo && browserInfo.url) {
+    try {
+      const parsedUrl = new URL(browserInfo.url);
+      url = browserInfo.url;
+      title = browserInfo.title || parsedUrl.hostname;
+      domain = parsedUrl.hostname;
+    } catch {
+      // If URL parsing fails, use the raw values
+      url = browserInfo.url || url;
+      title = browserInfo.title || title;
+    }
+  } else if (browserInfo && browserInfo.title) {
+    // We have a title but no URL (common on Linux/Firefox)
+    title = browserInfo.title;
+    domain = 'browser-capture';
+  }
+
+  try {
+    const highlight = {
+      text: selectedText,
+      url,
+      title,
+      domain,
+      timestamp: new Date().toISOString()
+    };
+
+    const { filename } = appendHighlight(currentVaultPath, highlight);
+
+    // Notify renderer to refresh if needed
+    BrowserWindow.getAllWindows().forEach(win => {
+      win.webContents.send('highlight:added', highlight);
+    });
+
+    // Show native notification
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'Highlight Saved',
+        body: `Saved to ${filename}`,
+        silent: true
+      }).show();
+    }
+
+  } catch (err) {
+    dialog.showErrorBox('Error', 'Failed to save highlight: ' + (err as Error).message);
+  }
+}
+
+/**
+ * Registers the global hotkey for capturing web highlights.
+ */
+function registerHighlightHotkey(): void {
+  // Use Cmd+Shift+H on macOS, Ctrl+Shift+H on Windows/Linux
+  const shortcut = 'CommandOrControl+Shift+H';
+  
+  const registered = globalShortcut.register(shortcut, async () => {
+    await captureWebHighlight();
+  });
+
+  if (registered) {
+    console.log(`Global hotkey ${shortcut} registered for web highlights`);
+  } else {
+    console.error(`Failed to register global hotkey ${shortcut}`);
+  }
+}
+
+/**
+ * IPC handler for setting the current vault path (used for web highlights).
+ */
+ipcMain.handle('vault:setCurrentPath', (_event, vaultPath: string) => {
+  currentVaultPath = vaultPath;
+  return { ok: true };
+});
+
+/**
+ * IPC handler for listing all web highlight files in the vault.
+ */
+ipcMain.handle('highlights:list', async (_event, vaultPath: string) => {
+  try {
+    if (!vaultPath || !fs.existsSync(vaultPath)) {
+      return { ok: false, message: 'Invalid vault path', highlights: [] };
+    }
+    
+    const highlightsDir = path.join(vaultPath, '.web-highlights');
+    if (!fs.existsSync(highlightsDir)) {
+      return { ok: true, highlights: [] };
+    }
+    
+    const files = fs.readdirSync(highlightsDir);
+    
+    const highlights = files
+      .filter(file => file.endsWith('.md'))
+      .map(file => {
+        const filePath = path.join(highlightsDir, file);
+        const stats = fs.statSync(filePath);
+        const domain = file.replace('.md', '');
+        return {
+          id: domain,
+          domain: domain,
+          filename: file,
+          path: filePath,
+          updatedAt: stats.mtime.toISOString(),
+        };
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    
+    return { ok: true, highlights };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}`,
+      highlights: [] 
+    };
+  }
+});
+
+/**
+ * IPC handler for reading a specific highlight file.
+ */
+ipcMain.handle('highlights:read', async (_event, filePath: string) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return { ok: false, message: 'File not found', content: '' };
+    }
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return { ok: true, content };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}`,
+      content: '' 
+    };
+  }
+});
+
+/**
+ * IPC handler for deleting a highlight file.
+ */
+ipcMain.handle('highlights:delete', async (_event, filePath: string) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return { ok: false, message: 'File not found' };
+    }
+    fs.unlinkSync(filePath);
+    return { ok: true, message: 'Highlight file deleted' };
+  } catch (e) {
+    return { 
+      ok: false, 
+      message: `Error: ${e instanceof Error ? e.message : 'Unknown error'}` 
+    };
+  }
+});
+
+/**
+ * IPC handler to get the current highlight hotkey.
+ */
+ipcMain.handle('highlights:getHotkey', () => {
+  return { hotkey: 'CommandOrControl+Shift+H' };
 });
 

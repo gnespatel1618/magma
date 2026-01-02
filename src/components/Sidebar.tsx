@@ -15,7 +15,8 @@ import {
   Minus,
   HelpCircle,
   Settings,
-  List
+  List,
+  Globe
 } from 'lucide-react';
 
 /**
@@ -35,9 +36,9 @@ const getFolderName = (path: string | null): string => {
  */
 export const Sidebar: React.FC<{
   vaultPath: string | null;
-  currentSection: 'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'settings';
+  currentSection: 'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'highlights' | 'settings';
   onOpenVault: () => void;
-  onSectionChange: (section: 'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'settings') => void;
+  onSectionChange: (section: 'dashboard' | 'notes' | 'tasks' | 'graph' | 'mindmap' | 'highlights' | 'settings') => void;
   children?: React.ReactNode;
 }> = ({ vaultPath, currentSection, onOpenVault, onSectionChange, children }) => {
   return (
@@ -98,6 +99,12 @@ export const Sidebar: React.FC<{
             active={currentSection === 'mindmap'}
             onClick={() => onSectionChange('mindmap')}
             title="Mind Map"
+          />
+          <IconButton 
+            icon={<Globe size={16} />} 
+            active={currentSection === 'highlights'}
+            onClick={() => onSectionChange('highlights')}
+            title="Web Highlights (Cmd+Shift+H)"
           />
           <IconButton 
             icon={<Calendar size={16} />} 

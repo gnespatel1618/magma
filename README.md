@@ -1,22 +1,45 @@
 # Magma
 
-> A modern, Electron-based note-taking application designed for Obsidian-style vaults. Edit Markdown files directly, manage tasks with Kanban views, and integrate with Git for version control.
+> A modern, Electron-based note-taking application designed for Obsidian-style vaults. Edit Markdown files directly, manage tasks with Kanban views, create mind maps, capture web highlights, and integrate with Git for version control.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB)](https://react.dev/)
 [![Electron](https://img.shields.io/badge/Electron-191970?logo=electron&logoColor=white)](https://www.electronjs.org/)
 
-Magma provides an intuitive interface for managing your knowledge base with a focus on simplicity and productivity. Perfect for users who want an Obsidian-compatible note-taking experience with built-in task management and Git integration.
+Magma provides an intuitive interface for managing your knowledge base with a focus on simplicity and productivity. Perfect for users who want an Obsidian-compatible note-taking experience with built-in task management, mind mapping, web clipping, and Git integration.
 
 ## Features
 
+### Core Features
 - **Markdown-first editing**: Edit real `.md` files with a live preview editor
 - **Task management**: Parse tasks from Markdown checkboxes with metadata (owner, project, due date, priority)
 - **Kanban & Table views**: Visualize tasks across your entire vault
 - **Git integration**: Snapshot, push, and pull changes directly from the app
 - **Tag extraction**: Automatically extract and display hashtags from notes
 - **Folder organization**: Create and organize notes in folders
+- **Backlinks**: Bidirectional linking between notes with automatic backlink detection
+- **Spell checking**: Native spell-check with suggestions and custom dictionary support
+
+### Mind Maps
+- **Visual mind mapping**: Create beautiful, interactive mind maps to organize ideas
+- **Tree layout**: Automatic hierarchical layout with smooth animations
+- **Rich nodes**: Add colored nodes with emoji support
+- **Connections**: Visual connections between related concepts
+- **Canvas controls**: Pan, zoom, and navigate large mind maps
+- **Persistent storage**: Mind maps are saved in your vault's `.mindmaps` folder
+
+### Web Highlights
+- **Browser clipping**: Capture text from any browser with a global hotkey
+- **Automatic URL detection**: Magma detects the active browser and captures the source URL
+- **Domain organization**: Highlights are organized by domain (e.g., `github-com.md`)
+- **Global hotkey**: Press `Cmd+Shift+H` (Mac) or `Ctrl+Shift+H` (Windows/Linux) to capture
+- **Supported browsers**: Chrome, Safari, Arc, Edge, Brave, Firefox, Vivaldi, Opera
+
+### Media Support
+- **Image embedding**: Paste or drag images directly into notes
+- **Media files**: Support for images, videos, and audio files
+- **Asset organization**: Media files are stored in an `assets` folder
 - **Excalidraw support**: Attach and save Excalidraw canvases alongside notes
 
 ## Screenshots
@@ -34,19 +57,25 @@ The application is built with a modular architecture:
 ### Frontend (React + TypeScript)
 - **Components**: Modular React components organized by feature
   - `components/dashboard/`: Dashboard views (Kanban, Table, Tags, Settings)
-  - `components/notes/`: Note management components (NoteTree, Editor)
-  - `components/ui/`: Reusable UI components (Badge, LabeledInput)
+  - `components/notes/`: Note management components (NoteTree, Backlinks, Breadcrumbs)
+  - `components/mindmap/`: Mind map editor and canvas components
+  - `components/highlights/`: Web highlights browser and viewer
+  - `components/ui/`: Reusable UI components (Badge, LabeledInput, ContextMenu)
 - **Hooks**: Custom React hooks for state management
+  - `useCanvasTransform.ts`: Pan and zoom for mind map canvas
+  - `useTreeLayout.ts`: Automatic tree layout algorithm
 - **Lib**: Utility functions for parsing and processing
   - `taskParser.ts`: Parses tasks from Markdown with metadata extraction
   - `tagParser.ts`: Extracts hashtags from Markdown content
+  - `backlinks.ts`: Bidirectional link detection and indexing
   - `git.ts`: Git operations (snapshot, push, pull)
   - `indexer.ts`: Vault indexing utilities
   - `ai.ts`: AI integration
 
 ### Backend (Electron)
-- **Main process** (`electron/main.ts`): Handles file system operations, Git commands, and IPC
+- **Main process** (`electron/main.ts`): Handles file system operations, Git commands, global hotkeys, and IPC
 - **Preload script** (`electron/preload.ts`): Secure bridge between renderer and main process
+- **Global hotkeys**: System-wide keyboard shortcuts for quick capture
 
 ## Installation
 
@@ -116,6 +145,32 @@ Supported metadata:
 - **Due date**: `due:YYYY-MM-DD`
 - **Priority**: `#high`, `#med`, or `#low`
 
+### Mind Maps
+
+Create visual mind maps to organize your ideas:
+
+1. **Open Mind Maps**: Click the brain icon in the sidebar
+2. **Create new**: Click "New Mind Map" and give it a name
+3. **Add nodes**: Double-click on the canvas or use the toolbar
+4. **Edit nodes**: Click on a node to select it, double-click to edit text
+5. **Connect nodes**: Drag from one node to another to create connections
+6. **Navigate**: Use mouse wheel to zoom, drag to pan
+7. **Save**: Mind maps are auto-saved to your vault's `.mindmaps` folder
+
+### Web Highlights
+
+Capture text from any browser directly into your notes:
+
+1. **Select text** in Chrome, Safari, Arc, Edge, Brave, or Firefox
+2. **Copy the text** with `Cmd+C` (or enable Accessibility permissions for auto-copy)
+3. **Press the hotkey**: `Cmd+Shift+H` (Mac) or `Ctrl+Shift+H` (Windows/Linux)
+4. **Done!** The highlight is saved to `.web-highlights/{domain}.md`
+
+**Enabling Auto-Copy (macOS)**:
+For seamless capture without manually copying, grant Accessibility permissions:
+- Go to **System Preferences → Privacy & Security → Accessibility**
+- Add **Magma** to the list
+
 ### Git Operations
 
 - **Snapshot**: Stages and commits all changes in the vault (creates a Git repo if needed)
@@ -132,25 +187,60 @@ git remote add origin <repository-url>
 
 Tags are automatically extracted from notes using `#hashtag` syntax. Tags are displayed in the Dashboard and can be used for filtering.
 
+### Backlinks
+
+Magma automatically detects bidirectional links between notes:
+- Use `[[Note Name]]` syntax to link to other notes
+- View incoming links in the Backlinks panel
+- Click on backlinks to navigate between related notes
+
 ## Project Structure
 
 ```
 note-taking-app/
 ├── src/
 │   ├── components/          # React components
-│   │   ├── dashboard/      # Dashboard views
-│   │   ├── notes/          # Note management
+│   │   ├── dashboard/      # Dashboard views (Kanban, Table, Settings)
+│   │   ├── notes/          # Note management (NoteTree, Backlinks, StatusBar)
+│   │   ├── mindmap/        # Mind map editor and components
+│   │   ├── highlights/     # Web highlights viewer
 │   │   └── ui/             # Reusable UI components
 │   ├── lib/                # Utility functions
+│   │   ├── taskParser.ts   # Task parsing from Markdown
+│   │   ├── tagParser.ts    # Hashtag extraction
+│   │   ├── backlinks.ts    # Bidirectional link indexing
+│   │   └── ...
 │   ├── types/              # TypeScript type definitions
 │   ├── App.tsx             # Main application component
 │   └── main.tsx            # React entry point
 ├── electron/
-│   ├── main.ts             # Electron main process
-│   └── preload.ts          # Preload script
+│   ├── main.ts             # Electron main process (file ops, hotkeys, IPC)
+│   └── preload.ts          # Secure bridge to renderer
+├── assets/                 # App icons and images
 ├── dist/                   # Build output
 └── package.json
 ```
+
+### Vault Structure
+
+When you open a vault, Magma creates these folders as needed:
+
+```
+your-vault/
+├── notes/                  # Your Markdown notes
+├── assets/                 # Media files (images, videos, audio)
+├── .mindmaps/              # Mind map JSON files (hidden folder)
+├── .web-highlights/        # Web clippings organized by domain
+└── .git/                   # Git repository (if using version control)
+```
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Cmd/Ctrl + Shift + H` | Capture web highlight (global - works from any app) |
+| `Cmd/Ctrl + S` | Save current note |
+| `Cmd/Ctrl + N` | Create new note |
 
 ## Development Guidelines
 

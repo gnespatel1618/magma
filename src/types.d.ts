@@ -7,6 +7,22 @@ interface MindmapMeta {
   updatedAt: string;
 }
 
+interface HighlightFileMeta {
+  id: string;
+  domain: string;
+  filename: string;
+  path: string;
+  updatedAt: string;
+}
+
+interface WebHighlight {
+  text: string;
+  url: string;
+  title: string;
+  domain: string;
+  timestamp: string;
+}
+
 declare global {
   interface Window {
     appBridge?: {
@@ -33,6 +49,13 @@ declare global {
       saveMindmap?: (vaultPath: string, name: string, data: unknown) => Promise<{ ok: boolean; message?: string; path?: string; id?: string }>;
       loadMindmap?: (vaultPath: string, name: string) => Promise<{ ok: boolean; data?: unknown; message?: string }>;
       deleteMindmap?: (vaultPath: string, name: string) => Promise<{ ok: boolean; message?: string }>;
+      // Web Highlights Operations
+      setCurrentVaultPath?: (vaultPath: string) => Promise<{ ok: boolean }>;
+      listHighlights?: (vaultPath: string) => Promise<{ ok: boolean; highlights: HighlightFileMeta[]; message?: string }>;
+      readHighlight?: (filePath: string) => Promise<{ ok: boolean; content: string; message?: string }>;
+      deleteHighlight?: (filePath: string) => Promise<{ ok: boolean; message?: string }>;
+      getHighlightHotkey?: () => Promise<{ hotkey: string }>;
+      onHighlightAdded?: (callback: (highlight: WebHighlight) => void) => () => void;
     };
   }
 }
