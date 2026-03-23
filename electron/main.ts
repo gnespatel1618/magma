@@ -6,11 +6,28 @@ import simpleGit from 'simple-git';
 import * as os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import {
+  getGlobalConfig,
+  saveGlobalConfig,
+  getWindowBounds,
+  saveWindowBounds,
+  registerVault,
+  loadVaultSettings,
+  saveVaultSettings,
+  loadWorkspace,
+  saveWorkspace,
+  loadSecret,
+  saveSecret,
+  ensureMagmaDir,
+  ensureGitignoreEntries,
+} from './configService';
 
 const execAsync = promisify(exec);
 
 // Track the current vault path for web highlights
 let currentVaultPath: string | null = null;
+
+let boundsDebounceTimer: NodeJS.Timeout | null = null;
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -19,20 +36,43 @@ const isDev = !!process.env.VITE_DEV_SERVER_URL;
  * Loads the development server URL in dev mode, or the built HTML file in production.
  */
 const createWindow = async (): Promise<void> => {
+  const savedBounds = getWindowBounds();
+
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: savedBounds.width,
+    height: savedBounds.height,
+    ...(savedBounds.x !== undefined && savedBounds.y !== undefined
+      ? { x: savedBounds.x, y: savedBounds.y }
+      : {}),
     title: 'Magma',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      spellcheck: true, // Enable spell-checking
+      spellcheck: true,
     },
     ...(process.platform === 'darwin' && (() => {
       const iconPath = path.join(__dirname, '..', 'assets', 'icon.icns');
       return fs.existsSync(iconPath) ? { icon: iconPath } : {};
     })()),
+  });
+
+  const persistBounds = () => {
+    if (win.isMinimized() || win.isMaximized()) return;
+    const bounds = win.getBounds();
+    if (boundsDebounceTimer) clearTimeout(boundsDebounceTimer);
+    boundsDebounceTimer = setTimeout(() => {
+      saveWindowBounds(bounds);
+    }, 500);
+  };
+
+  win.on('resize', persistBounds);
+  win.on('move', persistBounds);
+
+  win.on('close', () => {
+    if (!win.isMinimized() && !win.isMaximized()) {
+      saveWindowBounds(win.getBounds());
+    }
   });
 
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
@@ -121,37 +161,25 @@ const createWindow = async (): Promise<void> => {
   });
 };
 
-app.whenReady().then(() => {
-  // Set app name for macOS dock and menu bar
+app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
     app.setName('Magma');
-    // Try to set dock icon if available
     const iconPath = path.join(__dirname, '..', 'assets', 'icon.png');
     if (fs.existsSync(iconPath)) {
       app.dock?.setIcon(iconPath);
     }
   }
   
-  // Set spell-checker language (use system default or specify languages)
-  // This enables spell-checking with suggestions
   const defaultSession = session.defaultSession;
-  
-  // Get system language or use English as fallback
   const systemLanguage = app.getLocale() || 'en-US';
-  // Set multiple language codes to ensure spell-checking works
   const languages = [systemLanguage];
   if (!languages.includes('en-US')) languages.push('en-US');
   if (!languages.includes('en-GB')) languages.push('en-GB');
-  
   defaultSession.setSpellCheckerLanguages(languages);
   
-  // Log available languages for debugging
-  console.log('Spell-checker languages set to:', languages);
-  
-  // Register global hotkey for web highlights
   registerHighlightHotkey();
   
-  createWindow();
+  await createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -160,7 +188,12 @@ app.whenReady().then(() => {
   });
 });
 
-// Unregister global shortcuts when app is about to quit
+app.on('before-quit', () => {
+  BrowserWindow.getAllWindows().forEach(win => {
+    win.webContents.send('app:flush-before-quit');
+  });
+});
+
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
@@ -212,8 +245,7 @@ const scanVault = (
   
   const entries = fs.readdirSync(fullPath, { withFileTypes: true });
   
-  // Folders to hide from the notes tree
-  const hiddenFolders = ['.git', '.mindmaps', 'assets'];
+  const hiddenFolders = ['.git', '.magma', '.mindmaps', 'assets', '.web-highlights'];
   
   for (const entry of entries) {
     // Skip hidden folders
@@ -1273,5 +1305,56 @@ ipcMain.handle('highlights:delete', async (_event, filePath: string) => {
  */
 ipcMain.handle('highlights:getHotkey', () => {
   return { hotkey: 'CommandOrControl+Shift+H' };
+});
+
+// ============================================
+// Config / Persistence IPC Handlers
+// ============================================
+
+ipcMain.handle('config:loadGlobal', () => {
+  return getGlobalConfig();
+});
+
+ipcMain.handle('config:saveGlobal', (_event, config: Record<string, unknown>) => {
+  saveGlobalConfig(config);
+  return { ok: true };
+});
+
+ipcMain.handle('config:registerVault', (_event, vaultPath: string) => {
+  registerVault(vaultPath);
+  return { ok: true };
+});
+
+ipcMain.handle('config:loadVaultSettings', (_event, vaultPath: string) => {
+  return loadVaultSettings(vaultPath);
+});
+
+ipcMain.handle('config:saveVaultSettings', (_event, vaultPath: string, settings: Record<string, unknown>) => {
+  saveVaultSettings(vaultPath, settings);
+  return { ok: true };
+});
+
+ipcMain.handle('config:loadWorkspace', (_event, vaultPath: string) => {
+  return loadWorkspace(vaultPath);
+});
+
+ipcMain.handle('config:saveWorkspace', (_event, vaultPath: string, state: Record<string, unknown>) => {
+  saveWorkspace(vaultPath, state);
+  return { ok: true };
+});
+
+ipcMain.handle('config:loadSecret', (_event, vaultPath: string, key: string) => {
+  return { value: loadSecret(vaultPath, key) };
+});
+
+ipcMain.handle('config:saveSecret', (_event, vaultPath: string, key: string, value: string) => {
+  saveSecret(vaultPath, key, value);
+  return { ok: true };
+});
+
+ipcMain.handle('config:ensureMagmaDir', (_event, vaultPath: string) => {
+  ensureMagmaDir(vaultPath);
+  ensureGitignoreEntries(vaultPath);
+  return { ok: true };
 });
 

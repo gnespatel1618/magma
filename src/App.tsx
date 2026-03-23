@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -94,17 +94,22 @@ function App() {
   const [backlinksIndex, setBacklinksIndex] = useState<Map<string, NoteMeta[]>>(new Map());
   const [currentMindmapId, setCurrentMindmapId] = useState<string | null>(null);
   const [currentMindmapName, setCurrentMindmapName] = useState<string>('Untitled');
+  const [vaultSettings, setVaultSettings] = useState<VaultSettings | null>(null);
+  const [isRestoringState, setIsRestoringState] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const workspaceSaveRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
+  const isRestoringRef = useRef<boolean>(false);
   const notesRef = useRef<NoteMeta[]>([]);
   const noteContentRef = useRef<string>('');
   const selectedNoteRef = useRef<NoteMeta | null>(null);
   const isRefreshingRef = useRef<boolean>(false);
+  const vaultPathRef = useRef<string | null>(null);
   
-  // Keep refs in sync with state (using direct assignment to avoid re-renders)
   notesRef.current = notes;
   noteContentRef.current = noteContent;
   selectedNoteRef.current = selectedNote;
+  vaultPathRef.current = vaultPath;
 
   // Filter and sort tasks
   const filteredAndSortedTasks = useMemo(() => {
@@ -222,14 +227,85 @@ function App() {
     [filteredAndSortedTasks]
   );
 
-  // Cleanup timeout on unmount (must be before any conditional returns)
+  // Cleanup timeouts on unmount (must be before any conditional returns)
   useEffect(() => {
     return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (workspaceSaveRef.current) clearTimeout(workspaceSaveRef.current);
     };
   }, []);
+
+  // Auto-open last vault on startup
+  useEffect(() => {
+    (async () => {
+      try {
+        const globalConfig = await window.appBridge?.loadGlobalConfig?.();
+        if (globalConfig?.lastVaultPath) {
+          await initializeVault(globalConfig.lastVaultPath);
+        }
+      } catch (e) {
+        console.error('Failed to auto-open last vault:', e);
+      }
+    })();
+  }, []);
+
+  // Flush-on-quit: save pending note content and workspace state
+  useEffect(() => {
+    const cleanup = window.appBridge?.onFlushBeforeQuit?.(() => {
+      const note = selectedNoteRef.current;
+      const content = noteContentRef.current;
+      const vault = vaultPathRef.current;
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (note && vault && content !== undefined) {
+        window.appBridge?.writeNote?.(note.path, content);
+      }
+      if (vault) {
+        window.appBridge?.saveWorkspace?.(vault, {
+          activeSection: section,
+          selectedNotePath: selectedNoteRef.current?.path ?? null,
+          selectedMindMapId: currentMindmapId,
+          selectedMindMapName: currentMindmapName,
+          taskFilters: {
+            searchQuery: taskSearchQuery,
+            filterOwner: taskFilterOwner,
+            filterProject: taskFilterProject,
+            filterPriority: taskFilterPriority,
+            filterStatus: taskFilterStatus,
+            sortBy: taskSortBy,
+            sortOrder: taskSortOrder,
+          },
+        });
+      }
+    });
+    return () => { cleanup?.(); };
+  }, [section, currentMindmapId, currentMindmapName, taskSearchQuery, taskFilterOwner, taskFilterProject, taskFilterPriority, taskFilterStatus, taskSortBy, taskSortOrder]);
+
+  // Debounced workspace state persistence
+  useEffect(() => {
+    if (isRestoringRef.current || !vaultPath) return;
+    if (workspaceSaveRef.current) clearTimeout(workspaceSaveRef.current);
+    workspaceSaveRef.current = setTimeout(() => {
+      window.appBridge?.saveWorkspace?.(vaultPath, {
+        activeSection: section,
+        selectedNotePath: selectedNote?.path ?? null,
+        selectedMindMapId: currentMindmapId,
+        selectedMindMapName: currentMindmapName,
+        taskFilters: {
+          searchQuery: taskSearchQuery,
+          filterOwner: taskFilterOwner,
+          filterProject: taskFilterProject,
+          filterPriority: taskFilterPriority,
+          filterStatus: taskFilterStatus,
+          sortBy: taskSortBy,
+          sortOrder: taskSortOrder,
+        },
+      });
+    }, 500);
+  }, [vaultPath, section, selectedNote?.path, currentMindmapId, currentMindmapName, taskSearchQuery, taskFilterOwner, taskFilterProject, taskFilterPriority, taskFilterStatus, taskSortBy, taskSortOrder]);
 
   // Sync vault path with main process for web highlight capture
   useEffect(() => {
@@ -237,10 +313,8 @@ function App() {
       window.appBridge?.setCurrentVaultPath?.(vaultPath);
     }
     
-    // Listen for new highlights being added
     const cleanup = window.appBridge?.onHighlightAdded?.((highlight) => {
       console.log('Web highlight added:', highlight.domain);
-      // Could show a toast notification here in the future
     });
     
     return () => {
@@ -251,18 +325,84 @@ function App() {
   // Refresh tasks when switching to tasks section
   useEffect(() => {
     if (section === 'tasks' && vaultPath && notes.length > 0 && !isRefreshingRef.current) {
-      console.log('Switched to Tasks section, refreshing tasks...');
       refreshAllTasks(vaultPath, notes).catch(console.error);
     }
   }, [section, vaultPath, notes.length]);
 
+  const initializeVault = useCallback(async (vault: string) => {
+    isRestoringRef.current = true;
+    setIsRestoringState(true);
+    setVaultPath(vault);
+
+    await window.appBridge?.ensureMagmaDir?.(vault);
+    await window.appBridge?.registerVault?.(vault);
+    await window.appBridge?.setCurrentVaultPath?.(vault);
+
+    const [settings, workspace] = await Promise.all([
+      window.appBridge?.loadVaultSettings?.(vault),
+      window.appBridge?.loadWorkspace?.(vault),
+    ]);
+
+    if (settings) setVaultSettings(settings);
+
+    await loadNotes(vault);
+
+    if (workspace) {
+      if (workspace.activeSection) {
+        setSection(workspace.activeSection as typeof section);
+      }
+      if (workspace.selectedMindMapId) {
+        setCurrentMindmapId(workspace.selectedMindMapId);
+        setCurrentMindmapName(workspace.selectedMindMapName || 'Untitled');
+      }
+      if (workspace.taskFilters) {
+        const tf = workspace.taskFilters;
+        if (tf.searchQuery) setTaskSearchQuery(tf.searchQuery);
+        if (tf.filterOwner) setTaskFilterOwner(tf.filterOwner);
+        if (tf.filterProject) setTaskFilterProject(tf.filterProject);
+        if (tf.filterPriority) setTaskFilterPriority(tf.filterPriority);
+        if (tf.filterStatus) setTaskFilterStatus(tf.filterStatus);
+        if (tf.sortBy) setTaskSortBy(tf.sortBy);
+        if (tf.sortOrder) setTaskSortOrder(tf.sortOrder);
+      }
+      if (workspace.selectedNotePath) {
+        const allNotes = notesRef.current;
+        const findNote = (items: NoteMeta[], targetPath: string): NoteMeta | null => {
+          for (const item of items) {
+            if (item.path === targetPath) return item;
+            if (item.children) {
+              const found = findNote(item.children, targetPath);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const note = findNote(allNotes, workspace.selectedNotePath);
+        if (note) {
+          setSelectedNote(note);
+          const content = (await window.appBridge?.readNote?.(note.path)) ?? '';
+          setNoteContent(content);
+          setTasks(parseTasksFromMarkdown(content));
+          if (workspace.activeSection !== 'notes') {
+            // Don't override section if it was explicitly set
+          } else {
+            setSection('notes');
+          }
+        }
+      }
+    }
+
+    // Allow workspace save effects to fire after state settles
+    setTimeout(() => {
+      isRestoringRef.current = false;
+      setIsRestoringState(false);
+    }, 100);
+  }, []);
+
   const openVault = async () => {
     const chosen = await window.appBridge?.openVault?.();
     if (chosen) {
-      setVaultPath(chosen);
-      // Set the current vault path for web highlights capture
-      await window.appBridge?.setCurrentVaultPath?.(chosen);
-      await loadNotes(chosen);
+      await initializeVault(chosen);
     }
   };
 
@@ -1328,7 +1468,15 @@ function App() {
 
           {section === 'settings' && (
             <div className="h-full overflow-y-auto px-5 py-5">
-              <SettingsPage />
+              <SettingsPage
+                vaultPath={vaultPath}
+                settings={vaultSettings}
+                onSave={async (updated) => {
+                  if (!vaultPath) return;
+                  await window.appBridge?.saveVaultSettings?.(vaultPath, updated);
+                  setVaultSettings({ ...vaultSettings!, ...updated });
+                }}
+              />
             </div>
           )}
           {section === 'tasks' && (

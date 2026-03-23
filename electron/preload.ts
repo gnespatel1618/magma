@@ -221,24 +221,37 @@ contextBridge.exposeInMainWorld('appBridge', {
   deleteHighlight: (filePath: string) =>
     ipcRenderer.invoke('highlights:delete', filePath),
 
-  /**
-   * Gets the current hotkey for capturing web highlights.
-   * 
-   * @returns Promise resolving to the hotkey string
-   */
   getHighlightHotkey: () =>
     ipcRenderer.invoke('highlights:getHotkey'),
 
-  /**
-   * Registers a callback for when a new highlight is added.
-   * 
-   * @param callback - Function to call when a highlight is added
-   * @returns Function to remove the listener
-   */
   onHighlightAdded: (callback: (highlight: { text: string; url: string; title: string; domain: string; timestamp: string }) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, highlight: { text: string; url: string; title: string; domain: string; timestamp: string }) => callback(highlight);
     ipcRenderer.on('highlight:added', handler);
     return () => ipcRenderer.removeListener('highlight:added', handler);
+  },
+
+  // ============================================
+  // Config / Persistence Operations
+  // ============================================
+
+  loadGlobalConfig: () => ipcRenderer.invoke('config:loadGlobal'),
+  saveGlobalConfig: (config: Record<string, unknown>) => ipcRenderer.invoke('config:saveGlobal', config),
+  registerVault: (vaultPath: string) => ipcRenderer.invoke('config:registerVault', vaultPath),
+  loadVaultSettings: (vaultPath: string) => ipcRenderer.invoke('config:loadVaultSettings', vaultPath),
+  saveVaultSettings: (vaultPath: string, settings: Record<string, unknown>) =>
+    ipcRenderer.invoke('config:saveVaultSettings', vaultPath, settings),
+  loadWorkspace: (vaultPath: string) => ipcRenderer.invoke('config:loadWorkspace', vaultPath),
+  saveWorkspace: (vaultPath: string, state: Record<string, unknown>) =>
+    ipcRenderer.invoke('config:saveWorkspace', vaultPath, state),
+  loadSecret: (vaultPath: string, key: string) => ipcRenderer.invoke('config:loadSecret', vaultPath, key),
+  saveSecret: (vaultPath: string, key: string, value: string) =>
+    ipcRenderer.invoke('config:saveSecret', vaultPath, key, value),
+  ensureMagmaDir: (vaultPath: string) => ipcRenderer.invoke('config:ensureMagmaDir', vaultPath),
+
+  onFlushBeforeQuit: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('app:flush-before-quit', handler);
+    return () => ipcRenderer.removeListener('app:flush-before-quit', handler);
   },
 });
 
