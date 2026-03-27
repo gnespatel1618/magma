@@ -24,12 +24,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/magma.git"
+    "url": "https://github.com/gnespatel1618/magma.git"
   },
   "bugs": {
-    "url": "https://github.com/YOUR_USERNAME/magma/issues"
+    "url": "https://github.com/gnespatel1618/magma/issues"
   },
-  "homepage": "https://github.com/YOUR_USERNAME/magma#readme",
+  "homepage": "https://github.com/gnespatel1618/magma#readme",
   "scripts": {
     "dev": "run-p dev:vite dev:main dev:preload dev:electron:start",
     "dev:vite": "vite dev --port 5173 --strictPort",
@@ -41,6 +41,7 @@
     "build:preload": "esbuild electron/preload.ts --bundle --platform=node --external:electron --outfile=dist/preload.js --format=cjs",
     "build:renderer": "vite build",
     "package": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
     "start": "npm run build && electron .",
     "lint": "echo \"Add linting as needed\""
   },
