@@ -95,6 +95,12 @@
     },
     "linux": {
       "icon": "assets/icon.png"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "gnespatel1618",
+      "repo": "magma",
+      "releaseType": "release"
     }
   }
 }
